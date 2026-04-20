@@ -1,0 +1,3 @@
+/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles/midi_monitor.dir
+/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles/edit_cache.dir
+/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles/rebuild_cache.dir
