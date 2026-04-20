@@ -6,8 +6,7 @@ PerformanceWindow::PerformanceWindow() = default;
 void PerformanceWindow::open(int displayX, int displayY, int width, int height) {
     window_.create(sf::VideoMode({static_cast<unsigned>(width),
                                   static_cast<unsigned>(height)}),
-                   "vjay_ace - Output",
-                   sf::Style::None);   // borderless
+                   "vjay_ace - Output");
     window_.setPosition({displayX, displayY});
     window_.setFramerateLimit(60);
     window_.setVerticalSyncEnabled(true);
@@ -24,9 +23,6 @@ void PerformanceWindow::close()        { window_.close(); }
 bool PerformanceWindow::handleEvents() {
     while (const auto event = window_.pollEvent()) {
         if (event->is<sf::Event::Closed>()) { window_.close(); return false; }
-        // ESC to close
-        if (const auto* kp = event->getIf<sf::Event::KeyPressed>())
-            if (kp->code == sf::Keyboard::Key::Escape) { window_.close(); return false; }
     }
     return true;
 }

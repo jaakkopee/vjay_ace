@@ -38,8 +38,9 @@ inline int ccToKnobIndex(int cc) {
 inline constexpr int NOTE_LAYER_OPACITY_MODE  = 36; // C2  held → 6 knobs = layer opacities
 inline constexpr int NOTE_FX_AUDIO_MODE       = 37; // C#2 held → 6 knobs = audio gain
 
-// FX patch select notes start at D2 = 38 (to be extended)
-inline constexpr int NOTE_FX_PATCH_BASE       = 38;
+// FX patch select notes start at D2 = 38
+inline constexpr int NOTE_SCENE_BASE = 38;   // D2
+inline constexpr int NUM_SCENES      = 14;   // D2 (38) … D#3 (51)
 
 // ── Knob value range ────────────────────────────────────────────────────────
 inline constexpr int CC_MIN = 0;
@@ -116,4 +117,86 @@ struct LayerState {
 
     // Shared
     int         lastCC[6] = {};  // last CC values received for this layer's 6 knobs
+};
+
+// ── Scene ──────────────────────────────────────────────────────────────────
+// A scene sets all three FX layer patches and their default parameters at once.
+// Triggered by MIDI note-on in range D2(38)…D#3(51).
+struct Scene {
+    const char* name;
+    FxPatchId   fx[NUM_FX_LAYERS];                  // patch for slots 0,1,2
+    float       params[NUM_FX_LAYERS][FX_PARAM_COUNT]; // p0,p1 for each slot
+};
+
+// 14 scene stubs — one per pad D2…D#3
+inline constexpr Scene SCENES[NUM_SCENES] = {
+    // 00  D2   – bare pass-through, all layers visible
+    { "Pass-Through",
+      { FxPatchId::Passthrough, FxPatchId::Passthrough, FxPatchId::Passthrough },
+      { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+
+    // 01  D#2  – soft blur over everything
+    { "Blur Haze",
+      { FxPatchId::Blur, FxPatchId::Blur, FxPatchId::None },
+      { {0.3f,0.5f}, {0.2f,0.5f}, {0.5f,0.5f} } },
+
+    // 02  E2   – chromatic aberration on slot 0
+    { "Chroma Drift",
+      { FxPatchId::ChromaticAberr, FxPatchId::None, FxPatchId::None },
+      { {0.6f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+
+    // 03  F2   – slow hue rotation on all slots
+    { "Hue Wash",
+      { FxPatchId::HueCycle, FxPatchId::HueCycle, FxPatchId::HueCycle },
+      { {0.2f,0.5f}, {0.5f,0.5f}, {0.8f,0.5f} } },
+
+    // 04  F#2  – glitch on slot 0 only
+    { "Glitch Solo",
+      { FxPatchId::VideoGlitch, FxPatchId::None, FxPatchId::None },
+      { {0.5f,0.4f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+
+    // 05  G2   – heavy glitch on all slots
+    { "Full Glitch",
+      { FxPatchId::VideoGlitch, FxPatchId::VideoGlitch, FxPatchId::VideoGlitch },
+      { {0.7f,0.6f}, {0.5f,0.5f}, {0.3f,0.4f} } },
+
+    // 06  G#2  – kaleidoscope top layer
+    { "Kaleidoscope",
+      { FxPatchId::None, FxPatchId::None, FxPatchId::Kaleidoscope },
+      { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.3f} } },
+
+    // 07  A2   – wave distortion
+    { "Wave",
+      { FxPatchId::WaveDistort, FxPatchId::None, FxPatchId::None },
+      { {0.5f,0.4f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+
+    // 08  A#2  – edge ink / Sobel outline
+    { "Ink Outline",
+      { FxPatchId::EdgeInk, FxPatchId::None, FxPatchId::None },
+      { {0.5f,0.6f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+
+    // 09  B2   – mold trails simulation
+    { "Mold Trails",
+      { FxPatchId::MoldTrails, FxPatchId::None, FxPatchId::None },
+      { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+
+    // 10  C3   – fractal zoom
+    { "Fractal",
+      { FxPatchId::Fractal, FxPatchId::None, FxPatchId::None },
+      { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+
+    // 11  C#3  – chroma + hue combo
+    { "Prisma",
+      { FxPatchId::ChromaticAberr, FxPatchId::HueCycle, FxPatchId::None },
+      { {0.6f,0.5f}, {0.3f,0.5f}, {0.5f,0.5f} } },
+
+    // 12  D3   – glitch + wave + ink
+    { "Storm",
+      { FxPatchId::VideoGlitch, FxPatchId::WaveDistort, FxPatchId::EdgeInk },
+      { {0.6f,0.5f}, {0.5f,0.4f}, {0.5f,0.7f} } },
+
+    // 13  D#3  – mold + hue + fractal deep
+    { "Deep",
+      { FxPatchId::MoldTrails, FxPatchId::HueCycle, FxPatchId::Fractal },
+      { {0.5f,0.5f}, {0.4f,0.5f}, {0.5f,0.6f} } },
 };

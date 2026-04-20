@@ -58,8 +58,8 @@ private:
 
     // Called by MidiRouter when a knob moves
     void onKnob(int knobIdx, float normValue, KnobMode mode);
-    // Called by MidiRouter when an FX patch is selected
-    void onFxSelect(int fxSlot, FxPatchId patch);
+    // Called by MidiRouter when a scene pad is hit
+    void onSceneSelect(int sceneIdx);
     // Called by ControlWindow when user drags a knob
     void onKnobDrag(int knobIdx, float normValue);
 

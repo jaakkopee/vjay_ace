@@ -81,7 +81,7 @@ bool App::init() {
 
 void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
-    midi_.onFxSelect = [this](int slot, FxPatchId p){ onFxSelect(slot, p); };
+    midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
     midi_.onModeChange = [this](KnobMode m){
         knobMode_ = m;
         controlWin_.setKnobMode(m);
@@ -139,12 +139,18 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     controlWin_.setKnobValue(knobIdx, knobCC_[knobIdx]);
 }
 
-void App::onFxSelect(int fxSlot, FxPatchId patch) {
-    fxPatches_[fxSlot].id = patch;
-    compositor_.setFxPatch(fxSlot, patch);
-    int layerIdx = fxSlot * 2 + 1; // layer 1, 3, or 5
-    layers_.setFxPatch(layerIdx, patch);
-    controlWin_.setSceneName(fxPatchName(patch));
+void App::onSceneSelect(int sceneIdx) {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES) return;
+    const Scene& sc = SCENES[sceneIdx];
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+        fxPatches_[slot].id   = sc.fx[slot];
+        fxPatches_[slot].p[0] = sc.params[slot][0];
+        fxPatches_[slot].p[1] = sc.params[slot][1];
+        compositor_.setFxPatch(slot, sc.fx[slot]);
+        compositor_.setFxParams(slot, sc.params[slot][0], sc.params[slot][1]);
+        layers_.setFxPatch(slot * 2 + 1, sc.fx[slot]);
+    }
+    controlWin_.setSceneName(sc.name);
 }
 
 void App::onKnobDrag(int knobIdx, float normValue) {

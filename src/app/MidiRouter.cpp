@@ -95,10 +95,10 @@ void MidiRouter::processEvent(const std::vector<unsigned char>& msg) {
             if (onModeChange) onModeChange(mode_);
             return;
         }
-        // FX patch select
-        int slot = 0; FxPatchId patch = FxPatchId::None;
-        if (noteToFxSelect(ev.note, slot, patch)) {
-            if (onFxSelect) onFxSelect(slot, patch);
+        // Scene select
+        int sceneIdx = 0;
+        if (noteToScene(ev.note, sceneIdx)) {
+            if (onSceneSelect) onSceneSelect(sceneIdx);
             return;
         }
     }
@@ -123,17 +123,9 @@ int MidiRouter::ccToKnob(int cc) {
     return ccToKnobIndex(cc);
 }
 
-bool MidiRouter::noteToFxSelect(int note, int& outSlot, FxPatchId& outPatch) {
-    // Patch select notes start at NOTE_FX_PATCH_BASE (D2=38).
-    // Layout (sketch — user will provide exact mapping):
-    //   38..47 → slot 0 patches 1..10
-    //   48..57 → slot 1 patches 1..10
-    //   58..67 → slot 2 patches 1..10
-    int rel = note - NOTE_FX_PATCH_BASE;
-    if (rel < 0 || rel >= 30) return false;
-    outSlot  = rel / 10;
-    int pid  = (rel % 10) + 1;
-    if (pid >= static_cast<int>(FxPatchId::COUNT)) pid = 0;
-    outPatch = static_cast<FxPatchId>(pid);
+bool MidiRouter::noteToScene(int note, int& outSceneIdx) {
+    int rel = note - NOTE_SCENE_BASE;
+    if (rel < 0 || rel >= NUM_SCENES) return false;
+    outSceneIdx = rel;
     return true;
 }
