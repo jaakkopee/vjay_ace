@@ -41,7 +41,7 @@ static std::string noteName(unsigned char note) {
 // ── MidiMonitor ───────────────────────────────────────────────────────────────
 
 MidiMonitor::MidiMonitor()
-    : window_(sf::VideoMode({800, 600}), "MIDI Monitor — vjay_ace")
+    : window_(sf::VideoMode({800, 600}), "MIDI Monitor - vjay_ace")
     , gui_(window_)
 {
     window_.setFramerateLimit(60);
@@ -58,7 +58,7 @@ MidiMonitor::~MidiMonitor() {
 
 void MidiMonitor::buildGui() {
     // Top toolbar panel
-    auto toolbar = tgui::Panel::create({"100%", "44px"});
+    auto toolbar = tgui::Panel::create({"100%", "44"});
     toolbar->setPosition(0, 0);
     toolbar->getRenderer()->setBackgroundColor(tgui::Color(30, 30, 35));
     gui_.add(toolbar, "toolbar");
@@ -96,7 +96,7 @@ void MidiMonitor::buildGui() {
     // Event log
     logBox_ = tgui::ListBox::create();
     logBox_->setPosition(0, 44);
-    logBox_->setSize("100%", "100% - 44px");
+    logBox_->setSize("100%", "100% - 44");
     logBox_->setItemHeight(18);
     logBox_->getRenderer()->setBackgroundColor(tgui::Color(18, 18, 22));
     logBox_->getRenderer()->setTextColor(tgui::Color(200, 230, 200));

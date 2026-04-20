@@ -64,10 +64,12 @@ CMAKE_BINARY_DIR = /Users/jaakkop/Documents/koodii/vjay_ace/build
 
 # The main recursive "all" target.
 all: CMakeFiles/midi_monitor.dir/all
+all: CMakeFiles/vjay_ace.dir/all
 .PHONY : all
 
 # The main recursive "codegen" target.
 codegen: CMakeFiles/midi_monitor.dir/codegen
+codegen: CMakeFiles/vjay_ace.dir/codegen
 .PHONY : codegen
 
 # The main recursive "preinstall" target.
@@ -76,6 +78,7 @@ preinstall:
 
 # The main recursive "clean" target.
 clean: CMakeFiles/midi_monitor.dir/clean
+clean: CMakeFiles/vjay_ace.dir/clean
 .PHONY : clean
 
 #=============================================================================
@@ -109,6 +112,38 @@ CMakeFiles/midi_monitor.dir/codegen:
 CMakeFiles/midi_monitor.dir/clean:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/midi_monitor.dir/build.make CMakeFiles/midi_monitor.dir/clean
 .PHONY : CMakeFiles/midi_monitor.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/vjay_ace.dir
+
+# All Build rule for target.
+CMakeFiles/vjay_ace.dir/all:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=4,5,6,7,8,9,10,11,12,13 "Built target vjay_ace"
+.PHONY : CMakeFiles/vjay_ace.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/vjay_ace.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles 10
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/vjay_ace.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles 0
+.PHONY : CMakeFiles/vjay_ace.dir/rule
+
+# Convenience name for target.
+vjay_ace: CMakeFiles/vjay_ace.dir/rule
+.PHONY : vjay_ace
+
+# codegen rule for target.
+CMakeFiles/vjay_ace.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=4,5,6,7,8,9,10,11,12,13 "Finished codegen for target vjay_ace"
+.PHONY : CMakeFiles/vjay_ace.dir/codegen
+
+# clean rule for target.
+CMakeFiles/vjay_ace.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/clean
+.PHONY : CMakeFiles/vjay_ace.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

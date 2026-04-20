@@ -129,6 +129,187 @@ midi_monitor/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/midi_monitor.dir/build.make CMakeFiles/midi_monitor.dir/build
 .PHONY : midi_monitor/fast
 
+#=============================================================================
+# Target rules for targets named vjay_ace
+
+# Build rule for target.
+vjay_ace: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 vjay_ace
+.PHONY : vjay_ace
+
+# fast build rule for target.
+vjay_ace/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/build
+.PHONY : vjay_ace/fast
+
+src/app/App.o: src/app/App.mm.o
+.PHONY : src/app/App.o
+
+# target to build an object file
+src/app/App.mm.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/App.mm.o
+.PHONY : src/app/App.mm.o
+
+src/app/ControlWindow.o: src/app/ControlWindow.cpp.o
+.PHONY : src/app/ControlWindow.o
+
+# target to build an object file
+src/app/ControlWindow.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o
+.PHONY : src/app/ControlWindow.cpp.o
+
+src/app/ControlWindow.i: src/app/ControlWindow.cpp.i
+.PHONY : src/app/ControlWindow.i
+
+# target to preprocess a source file
+src/app/ControlWindow.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.i
+.PHONY : src/app/ControlWindow.cpp.i
+
+src/app/ControlWindow.s: src/app/ControlWindow.cpp.s
+.PHONY : src/app/ControlWindow.s
+
+# target to generate assembly for a file
+src/app/ControlWindow.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.s
+.PHONY : src/app/ControlWindow.cpp.s
+
+src/app/FxPatch.o: src/app/FxPatch.cpp.o
+.PHONY : src/app/FxPatch.o
+
+# target to build an object file
+src/app/FxPatch.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o
+.PHONY : src/app/FxPatch.cpp.o
+
+src/app/FxPatch.i: src/app/FxPatch.cpp.i
+.PHONY : src/app/FxPatch.i
+
+# target to preprocess a source file
+src/app/FxPatch.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.i
+.PHONY : src/app/FxPatch.cpp.i
+
+src/app/FxPatch.s: src/app/FxPatch.cpp.s
+.PHONY : src/app/FxPatch.s
+
+# target to generate assembly for a file
+src/app/FxPatch.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.s
+.PHONY : src/app/FxPatch.cpp.s
+
+src/app/LayerManager.o: src/app/LayerManager.cpp.o
+.PHONY : src/app/LayerManager.o
+
+# target to build an object file
+src/app/LayerManager.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.o
+.PHONY : src/app/LayerManager.cpp.o
+
+src/app/LayerManager.i: src/app/LayerManager.cpp.i
+.PHONY : src/app/LayerManager.i
+
+# target to preprocess a source file
+src/app/LayerManager.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.i
+.PHONY : src/app/LayerManager.cpp.i
+
+src/app/LayerManager.s: src/app/LayerManager.cpp.s
+.PHONY : src/app/LayerManager.s
+
+# target to generate assembly for a file
+src/app/LayerManager.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.s
+.PHONY : src/app/LayerManager.cpp.s
+
+src/app/MetalCompositor.o: src/app/MetalCompositor.mm.o
+.PHONY : src/app/MetalCompositor.o
+
+# target to build an object file
+src/app/MetalCompositor.mm.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/MetalCompositor.mm.o
+.PHONY : src/app/MetalCompositor.mm.o
+
+src/app/MidiRouter.o: src/app/MidiRouter.cpp.o
+.PHONY : src/app/MidiRouter.o
+
+# target to build an object file
+src/app/MidiRouter.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/MidiRouter.cpp.o
+.PHONY : src/app/MidiRouter.cpp.o
+
+src/app/MidiRouter.i: src/app/MidiRouter.cpp.i
+.PHONY : src/app/MidiRouter.i
+
+# target to preprocess a source file
+src/app/MidiRouter.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/MidiRouter.cpp.i
+.PHONY : src/app/MidiRouter.cpp.i
+
+src/app/MidiRouter.s: src/app/MidiRouter.cpp.s
+.PHONY : src/app/MidiRouter.s
+
+# target to generate assembly for a file
+src/app/MidiRouter.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/MidiRouter.cpp.s
+.PHONY : src/app/MidiRouter.cpp.s
+
+src/app/PerformanceWindow.o: src/app/PerformanceWindow.cpp.o
+.PHONY : src/app/PerformanceWindow.o
+
+# target to build an object file
+src/app/PerformanceWindow.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o
+.PHONY : src/app/PerformanceWindow.cpp.o
+
+src/app/PerformanceWindow.i: src/app/PerformanceWindow.cpp.i
+.PHONY : src/app/PerformanceWindow.i
+
+# target to preprocess a source file
+src/app/PerformanceWindow.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.i
+.PHONY : src/app/PerformanceWindow.cpp.i
+
+src/app/PerformanceWindow.s: src/app/PerformanceWindow.cpp.s
+.PHONY : src/app/PerformanceWindow.s
+
+# target to generate assembly for a file
+src/app/PerformanceWindow.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.s
+.PHONY : src/app/PerformanceWindow.cpp.s
+
+src/app/VideoDecoder.o: src/app/VideoDecoder.cpp.o
+.PHONY : src/app/VideoDecoder.o
+
+# target to build an object file
+src/app/VideoDecoder.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o
+.PHONY : src/app/VideoDecoder.cpp.o
+
+src/app/VideoDecoder.i: src/app/VideoDecoder.cpp.i
+.PHONY : src/app/VideoDecoder.i
+
+# target to preprocess a source file
+src/app/VideoDecoder.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.i
+.PHONY : src/app/VideoDecoder.cpp.i
+
+src/app/VideoDecoder.s: src/app/VideoDecoder.cpp.s
+.PHONY : src/app/VideoDecoder.s
+
+# target to generate assembly for a file
+src/app/VideoDecoder.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.s
+.PHONY : src/app/VideoDecoder.cpp.s
+
+src/app/main.o: src/app/main.mm.o
+.PHONY : src/app/main.o
+
+# target to build an object file
+src/app/main.mm.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/main.mm.o
+.PHONY : src/app/main.mm.o
+
 src/midi_monitor/MidiMonitor.o: src/midi_monitor/MidiMonitor.cpp.o
 .PHONY : src/midi_monitor/MidiMonitor.o
 
@@ -186,6 +367,28 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... midi_monitor"
+	@echo "... vjay_ace"
+	@echo "... src/app/App.o"
+	@echo "... src/app/ControlWindow.o"
+	@echo "... src/app/ControlWindow.i"
+	@echo "... src/app/ControlWindow.s"
+	@echo "... src/app/FxPatch.o"
+	@echo "... src/app/FxPatch.i"
+	@echo "... src/app/FxPatch.s"
+	@echo "... src/app/LayerManager.o"
+	@echo "... src/app/LayerManager.i"
+	@echo "... src/app/LayerManager.s"
+	@echo "... src/app/MetalCompositor.o"
+	@echo "... src/app/MidiRouter.o"
+	@echo "... src/app/MidiRouter.i"
+	@echo "... src/app/MidiRouter.s"
+	@echo "... src/app/PerformanceWindow.o"
+	@echo "... src/app/PerformanceWindow.i"
+	@echo "... src/app/PerformanceWindow.s"
+	@echo "... src/app/VideoDecoder.o"
+	@echo "... src/app/VideoDecoder.i"
+	@echo "... src/app/VideoDecoder.s"
+	@echo "... src/app/main.o"
 	@echo "... src/midi_monitor/MidiMonitor.o"
 	@echo "... src/midi_monitor/MidiMonitor.i"
 	@echo "... src/midi_monitor/MidiMonitor.s"
