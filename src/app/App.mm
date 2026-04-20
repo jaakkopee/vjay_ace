@@ -67,12 +67,12 @@ bool App::init() {
 
     wireCallbacks();
 
-    // ── Default FX names in control window ───────────────────────────────
-    for (int row = 0; row < NUM_FX_LAYERS; ++row) {
-        controlWin_.setEffectName(row * 2,     "Src " + std::to_string(row * 2));
-        controlWin_.setEffectName(row * 2 + 1, fxPatchName(FxPatchId::None));
-    }
-    controlWin_.setEffectName(6 - 1, "Src 6");   // last row = top source layer
+    // ── Default labels in control window ─────────────────────────────────
+    controlWin_.setSceneName("None");
+    constexpr const char* defaultNames[] = {"FX-1 P1","FX-1 P2","FX-2 P1","FX-2 P2","FX-3 P1","FX-3 P2"};
+    for (int i = 0; i < NUM_KNOBS; ++i)
+        controlWin_.setKnobParamName(i, defaultNames[i]);
+    controlWin_.setKnobMode(knobMode_);
 
     return true;
 }
@@ -85,10 +85,17 @@ void App::wireCallbacks() {
     midi_.onModeChange = [this](KnobMode m){
         knobMode_ = m;
         controlWin_.setKnobMode(m);
+        static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
+        static const char* gainNames[] = {"Gain 1",  "Gain 2",  "Gain 3",  "Gain 4",  "Gain 5",  "Gain 6"};
+        static const char* fxNames[]   = {"FX-1 P1", "FX-1 P2", "FX-2 P1", "FX-2 P2", "FX-3 P1", "FX-3 P2"};
+        const char** names = (m == KnobMode::LayerLevel) ? opNames
+                           : (m == KnobMode::FxAudio)    ? gainNames : fxNames;
+        for (int i = 0; i < NUM_KNOBS; ++i)
+            controlWin_.setKnobParamName(i, names[i]);
     };
 
-    controlWin_.onKnobDrag = [this](int row, int knob, float v){
-        onKnobDrag(row, knob, v);
+    controlWin_.onKnobDrag = [this](int knob, float v){
+        onKnobDrag(knob, v);
     };
 }
 
@@ -128,10 +135,8 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
             break;
     }
 
-    // Mirror to control window knob display
-    // Map knob to "row" = FX slot index (knob 0/1 → row 0, 2/3 → row 1, 4/5 → row 2)
-    int displayRow = knobIdx / 2;
-    controlWin_.setKnobValue(displayRow, knobIdx, knobCC_[knobIdx]);
+    // Mirror to control window
+    controlWin_.setKnobValue(knobIdx, knobCC_[knobIdx]);
 }
 
 void App::onFxSelect(int fxSlot, FxPatchId patch) {
@@ -139,12 +144,11 @@ void App::onFxSelect(int fxSlot, FxPatchId patch) {
     compositor_.setFxPatch(fxSlot, patch);
     int layerIdx = fxSlot * 2 + 1; // layer 1, 3, or 5
     layers_.setFxPatch(layerIdx, patch);
-    controlWin_.setEffectName(fxSlot * 2 + 1, fxPatchName(patch));
+    controlWin_.setSceneName(fxPatchName(patch));
 }
 
-void App::onKnobDrag(int layerRow, int knobIdx, float normValue) {
-    // Treat mouse drag the same as a MIDI knob in current mode
-    onKnob(layerRow * 2 + (knobIdx > 2 ? 1 : 0), normValue, knobMode_);
+void App::onKnobDrag(int knobIdx, float normValue) {
+    onKnob(knobIdx, normValue, knobMode_);
 }
 
 // ── Per-frame ─────────────────────────────────────────────────────────────────

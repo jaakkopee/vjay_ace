@@ -61,7 +61,7 @@ private:
     // Called by MidiRouter when an FX patch is selected
     void onFxSelect(int fxSlot, FxPatchId patch);
     // Called by ControlWindow when user drags a knob
-    void onKnobDrag(int layerRow, int knobIdx, float normValue);
+    void onKnobDrag(int knobIdx, float normValue);
 
     // ── Per-frame ────────────────────────────────────────────────────────
     void processFrame();

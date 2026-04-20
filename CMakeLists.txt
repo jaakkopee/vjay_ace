@@ -96,3 +96,11 @@ target_compile_options(vjay_ace PRIVATE
     ${RTMIDI_CFLAGS_OTHER}
     -fobjc-arc
 )
+
+# Copy Metal shader next to the executable so it can be found at runtime
+add_custom_command(TARGET vjay_ace POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_SOURCE_DIR}/src/app/shaders/vjay_shaders.metal
+        $<TARGET_FILE_DIR:vjay_ace>/vjay_shaders.metal
+    COMMENT "Copying vjay_shaders.metal to build dir"
+)

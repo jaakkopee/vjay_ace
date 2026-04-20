@@ -120,8 +120,7 @@ void MidiRouter::processEvent(const std::vector<unsigned char>& msg) {
 // ── mapping helpers ───────────────────────────────────────────────────────────
 
 int MidiRouter::ccToKnob(int cc) {
-    int k = cc - CC_LAYER_KNOB_BASE;
-    return (k >= 0 && k < 6) ? k : -1;
+    return ccToKnobIndex(cc);
 }
 
 bool MidiRouter::noteToFxSelect(int note, int& outSlot, FxPatchId& outPatch) {

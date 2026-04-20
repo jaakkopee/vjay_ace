@@ -23,12 +23,20 @@ inline bool isFxLayer(int idx)  { return idx % 2 == 1 && idx < NUM_LAYERS; }
 inline bool isSrcLayer(int idx) { return idx % 2 == 0 && idx < NUM_LAYERS; }
 
 // ── MIDI mapping constants ──────────────────────────────────────────────────
-// CC 0–5 → knobs for layers 0–6 (colour-coded blue→red)
-inline constexpr int CC_LAYER_KNOB_BASE = 0;   // CC0..CC5 = layer knobs
+// 6 physical knobs with their specific CC numbers
+inline constexpr int NUM_KNOBS = 6;
+inline constexpr std::array<int, NUM_KNOBS> KNOB_CCS = {3, 9, 12, 13, 14, 15};
+
+// Returns knob index 0-5 for a given CC, or -1 if not a knob CC.
+inline int ccToKnobIndex(int cc) {
+    for (int i = 0; i < NUM_KNOBS; ++i)
+        if (KNOB_CCS[i] == cc) return i;
+    return -1;
+}
 
 // Special note mappings (channel 1, note numbers)
-inline constexpr int NOTE_LAYER_OPACITY_MODE  = 36; // C2  → 6 knobs control layer opacities
-inline constexpr int NOTE_FX_AUDIO_MODE       = 37; // C#2 → 6 knobs control FX audio gain + bandpass
+inline constexpr int NOTE_LAYER_OPACITY_MODE  = 36; // C2  held → 6 knobs = layer opacities
+inline constexpr int NOTE_FX_AUDIO_MODE       = 37; // C#2 held → 6 knobs = audio gain
 
 // FX patch select notes start at D2 = 38 (to be extended)
 inline constexpr int NOTE_FX_PATCH_BASE       = 38;

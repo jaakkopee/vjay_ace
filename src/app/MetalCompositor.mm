@@ -29,8 +29,10 @@ bool MetalCompositor::init() {
     // Compile Metal source embedded as a string.
     // In a full build this would be a .metal file compiled via metallib.
     NSError* err = nil;
-    NSString* src = [NSString stringWithContentsOfFile:
-        @"src/app/shaders/vjay_shaders.metal"
+    // Resolve shader path relative to the executable (works regardless of cwd)
+    NSString* exeDir = [NSBundle mainBundle].executablePath.stringByDeletingLastPathComponent;
+    NSString* shaderPath = [exeDir stringByAppendingPathComponent:@"vjay_shaders.metal"];
+    NSString* src = [NSString stringWithContentsOfFile:shaderPath
         encoding:NSUTF8StringEncoding error:&err];
 
     if (!src) {
@@ -274,7 +276,7 @@ void MetalCompositor::runComposite(id<MTLCommandBuffer> cmd,
 // ── main composite entry ──────────────────────────────────────────────────────
 
 bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
-    if (!device_) return false;
+    if (!device_ || !outputTex_) return false;
     frameTime_ = elapsedSeconds();
 
     id<MTLCommandBuffer> cmd = [cmdQueue_ commandBuffer];
