@@ -3,6 +3,7 @@
 #include <SFML/Graphics.hpp>
 #include <TGUI/TGUI.hpp>
 #include <TGUI/Backend/SFML-Graphics.hpp>
+#include <TGUI/Backend/Renderer/SFML-Graphics/CanvasSFML.hpp>
 #include <array>
 #include <functional>
 #include <string>
@@ -61,14 +62,13 @@ private:
     // Per-row knob state
     struct KnobState {
         int ccValue = 0;
-        tgui::Canvas::Ptr canvas;
+        tgui::CanvasSFML::Ptr canvas;
     };
     std::array<std::array<KnobState, NUM_KNOBS>, NUM_ROWS> knobs_;
     std::array<tgui::Label::Ptr, NUM_ROWS> effectLabels_;
     tgui::Label::Ptr modeLabel_;
 
     // Right column: composite preview
-    sf::Sprite   previewSprite_;
     tgui::Panel::Ptr rightPanel_;
 
     // Knob drag tracking

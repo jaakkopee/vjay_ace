@@ -42,7 +42,7 @@ void ControlWindow::buildGui(int width, int height) {
         for (int k = 0; k < NUM_KNOBS; ++k) {
             auto& ks = knobs_[row][k];
             int xKnob = 120 + k * (KNOB_SIZE + 6);
-            ks.canvas = tgui::Canvas::create({KNOB_SIZE, KNOB_SIZE});
+            ks.canvas = tgui::CanvasSFML::create({KNOB_SIZE, KNOB_SIZE});
             ks.canvas->setPosition(xKnob, yBase + (ROW_H - KNOB_SIZE) / 2);
             gui_.add(ks.canvas);
             drawKnob(ks, row, k);
@@ -60,8 +60,8 @@ void ControlWindow::buildGui(int width, int height) {
 
 void ControlWindow::drawKnob(KnobState& ks, int /*row*/, int /*knob*/) {
     if (!ks.canvas) return;
+    ks.canvas->clear(tgui::Color(25, 25, 30));
     auto& rt = ks.canvas->getRenderTexture();
-    rt.clear(sf::Color(25, 25, 30));
 
     float norm = static_cast<float>(ks.ccValue) / 127.0f;
     KnobColour kc = ccToKnobColour(ks.ccValue);
@@ -100,7 +100,7 @@ void ControlWindow::drawKnob(KnobState& ks, int /*row*/, int /*knob*/) {
     dot.setFillColor(sf::Color(255, 255, 255, 160));
     rt.draw(dot);
 
-    rt.display();
+    ks.canvas->display();
 }
 
 // ── Public state setters ──────────────────────────────────────────────────────
