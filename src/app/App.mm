@@ -1,6 +1,7 @@
 #include "App.h"
 #import  <AppKit/AppKit.h>  // NSScreen for display positions
 #include <iostream>
+#include <fstream>
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,16 @@ bool App::init() {
         std::cout << "[App] No MIDI ports found\n";
     }
 
+    // ── Knob pickup state ────────────────────────────────────────────────
+    knobLastPhys_.fill(0.5f);
+
+    // ── Scene state objects — reset all to -1 (unvisited) ────────────────
+    for (auto& s : scenes_) s.reset();
+
     wireCallbacks();
+
+    // ── Restore persisted state ──────────────────────────────────────────
+    loadState();  // populates scenes_ + applies last-active scene (no-op if first launch)
 
     // ── Default labels in control window ─────────────────────────────────
     controlWin_.setSceneName("None");
@@ -73,6 +83,7 @@ bool App::init() {
     for (int i = 0; i < NUM_KNOBS; ++i)
         controlWin_.setKnobParamName(i, defaultNames[i]);
     controlWin_.setKnobMode(knobMode_);
+    refreshKnobDisplay();
 
     return true;
 }
@@ -92,69 +103,199 @@ void App::wireCallbacks() {
                            : (m == KnobMode::FxAudio)    ? gainNames : fxNames;
         for (int i = 0; i < NUM_KNOBS; ++i)
             controlWin_.setKnobParamName(i, names[i]);
+        refreshKnobDisplay();
     };
-
-    controlWin_.onKnobDrag = [this](int knob, float v){
-        onKnobDrag(knob, v);
-    };
+    controlWin_.onKnobDrag = [this](int knob, float v){ onKnobDrag(knob, v); };
 }
 
-void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
-    knobCC_[knobIdx] = static_cast<int>(normValue * 127.0f);
+// ── Engine helper: apply one knob value to the right engine target ────────────
 
+void App::applyKnob(int knobIdx, float v, KnobMode mode) {
     switch (mode) {
         case KnobMode::LayerLevel:
-            // knobs 0–5 → layer opacities for layers 1–6
             if (knobIdx < NUM_LAYERS - 1)
-                layers_.setOpacity(knobIdx + 1, normValue);
+                layers_.setOpacity(knobIdx + 1, v);
             break;
-
         case KnobMode::FxAudio:
-            // knobs 0–2 → FX audio gain; knobs 3–5 → bandpass centre freq (100–8000 Hz)
             if (knobIdx < NUM_FX_LAYERS)
-                layers_.setAudioGain(knobIdx * 2 + 1, normValue * 2.0f);
+                layers_.setAudioGain(knobIdx * 2 + 1, v * 2.0f);
             else {
                 int slot = knobIdx - NUM_FX_LAYERS;
-                float hz = 100.0f + normValue * 7900.0f;
-                layers_.setBandpass(slot * 2 + 1, hz);
+                layers_.setBandpass(slot * 2 + 1, 100.0f + v * 7900.0f);
             }
             break;
+        case KnobMode::FxParam: {
+            int slot = knobIdx / 2, param = knobIdx % 2;
+            if (slot < NUM_FX_LAYERS) {
+                fxPatches_[slot].p[param] = v;
+                compositor_.setFxParams(slot, fxPatches_[slot].p[0], fxPatches_[slot].p[1]);
+            }
+            break;
+        }
+    }
+}
 
-        case KnobMode::FxParam:
-            // knobs 0,1 → FX slot 0 params; 2,3 → slot 1; 4,5 → slot 2
-            {
-                int slot  = knobIdx / 2;
-                int param = knobIdx % 2;
-                if (slot < NUM_FX_LAYERS) {
-                    fxPatches_[slot].p[param] = normValue;
-                    compositor_.setFxParams(slot,
-                                            fxPatches_[slot].p[0],
-                                            fxPatches_[slot].p[1]);
-                }
-            }
-            break;
+// ── Push all stored values from one scene to the engine ───────────────────────
+
+void App::applySceneToEngine(int idx) {
+    const SceneState& s = scenes_[idx];
+    for (int mi = 0; mi < SceneState::NMODES; ++mi) {
+        auto mode = static_cast<KnobMode>(mi);
+        for (int k = 0; k < NUM_KNOBS; ++k) {
+            if (s.knobs[mi][k] >= 0.0f)
+                applyKnob(k, s.knobs[mi][k], mode);
+        }
+    }
+}
+
+// ── Sync all 6 knob arc widgets for the current mode ─────────────────────────
+
+void App::refreshKnobDisplay() {
+    if (currentScene_ < 0) return;
+    int mi = static_cast<int>(knobMode_);
+    const SceneState& s = scenes_[currentScene_];
+    for (int k = 0; k < NUM_KNOBS; ++k) {
+        float v = s.knobs[mi][k];
+        // If this knob hasn't been set in this scene yet, show physical position.
+        float display = (v >= 0.0f) ? v : knobLastPhys_[k];
+        controlWin_.setKnobValue(k, static_cast<int>(display * 127.0f));
+    }
+}
+
+// ── MIDI knob handler ─────────────────────────────────────────────────────────
+
+void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
+    float prev = knobLastPhys_[knobIdx];
+    knobLastPhys_[knobIdx] = normValue;
+
+    // If no scene is active there's nothing to store or apply.
+    if (currentScene_ < 0) return;
+
+    int    mi   = static_cast<int>(mode);
+    float& soft = scenes_[currentScene_].knobs[mi][knobIdx];
+
+    // ── Pickup / catch-up ────────────────────────────────────────────────
+    // soft == -1.0f → first touch in this scene: apply immediately.
+    // Otherwise the physical pot must sweep through the stored value first.
+    if (soft >= 0.0f) {
+        bool crossed = (prev <= soft && soft <= normValue) ||
+                       (normValue <= soft && soft <= prev);
+        bool close   = std::abs(normValue - soft) < (3.0f / 127.0f);
+        if (!crossed && !close) {
+            // Not caught up — show physical position so the arc moves.
+            controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+            return;
+        }
     }
 
-    // Mirror to control window
-    controlWin_.setKnobValue(knobIdx, knobCC_[knobIdx]);
+    // Caught up (or first touch): store and apply.
+    soft = normValue;
+    applyKnob(knobIdx, normValue, mode);
+    controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
+
+// ── Scene select ──────────────────────────────────────────────────────────────
 
 void App::onSceneSelect(int sceneIdx) {
     if (sceneIdx < 0 || sceneIdx >= NUM_SCENES) return;
+
+    currentScene_ = sceneIdx;
     const Scene& sc = SCENES[sceneIdx];
+
+    // 1. Apply the scene's FX patch selection.
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
-        fxPatches_[slot].id   = sc.fx[slot];
-        fxPatches_[slot].p[0] = sc.params[slot][0];
-        fxPatches_[slot].p[1] = sc.params[slot][1];
+        fxPatches_[slot].id = sc.fx[slot];
         compositor_.setFxPatch(slot, sc.fx[slot]);
-        compositor_.setFxParams(slot, sc.params[slot][0], sc.params[slot][1]);
         layers_.setFxPatch(slot * 2 + 1, sc.fx[slot]);
     }
     controlWin_.setSceneName(sc.name);
+
+    int fxMi = static_cast<int>(KnobMode::FxParam);
+    SceneState& s = scenes_[sceneIdx];
+
+    if (!s.hasData(fxMi)) {
+        // First visit: seed FxParam knobs from SCENES[] defaults.
+        // Applied directly to the engine; scene object stores them so
+        // subsequent visits correctly restore them.
+        for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+            s.knobs[fxMi][slot * 2]     = sc.params[slot][0];
+            s.knobs[fxMi][slot * 2 + 1] = sc.params[slot][1];
+        }
+    }
+
+    // 2. Apply all stored knob values to the engine.
+    applySceneToEngine(sceneIdx);
+
+    // 3. Refresh the software knob arcs to show what is actually applied.
+    refreshKnobDisplay();
 }
 
+// ── GUI knob drag ─────────────────────────────────────────────────────────────
+
 void App::onKnobDrag(int knobIdx, float normValue) {
-    onKnob(knobIdx, normValue, knobMode_);
+    if (currentScene_ < 0) return;
+    int mi = static_cast<int>(knobMode_);
+    // GUI drag bypasses pickup: write directly to scene and sync physical tracker.
+    scenes_[currentScene_].knobs[mi][knobIdx] = normValue;
+    knobLastPhys_[knobIdx] = normValue;
+    applyKnob(knobIdx, normValue, knobMode_);
+    controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+}
+
+// ── State persistence ─────────────────────────────────────────────────────────
+
+std::string App::statePath() {
+    const char* home = getenv("HOME");
+    return home ? std::string(home) + "/.vjay_ace_state" : "/tmp/vjay_ace_state";
+}
+
+void App::saveState() const {
+    std::ofstream f(statePath(), std::ios::binary | std::ios::trunc);
+    if (!f) { std::cerr << "[App] Could not save state\n"; return; }
+    // Write magic + version for future-proofing
+    const uint32_t magic = 0x56414345; // 'VACE'
+    const uint32_t ver   = 2;
+    f.write(reinterpret_cast<const char*>(&magic), 4);
+    f.write(reinterpret_cast<const char*>(&ver),   4);
+    // Write all 14 scene states
+    for (const auto& s : scenes_)
+        for (const auto& row : s.knobs)
+            for (float v : row)
+                f.write(reinterpret_cast<const char*>(&v), sizeof(float));
+    f.write(reinterpret_cast<const char*>(&currentScene_), sizeof(int));
+    std::cout << "[App] State saved to " << statePath() << "\n";
+}
+
+void App::loadState() {
+    std::ifstream f(statePath(), std::ios::binary);
+    if (!f) return;
+    uint32_t magic = 0, ver = 0;
+    if (!f.read(reinterpret_cast<char*>(&magic), 4)) return;
+    if (!f.read(reinterpret_cast<char*>(&ver),   4)) return;
+    if (magic != 0x56414345 || ver != 2) {
+        std::cerr << "[App] Ignoring incompatible state file\n";
+        return;
+    }
+    for (auto& s : scenes_)
+        for (auto& row : s.knobs)
+            for (float& v : row)
+                if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
+    int savedScene = -1;
+    if (f.read(reinterpret_cast<char*>(&savedScene), sizeof(int)))
+        currentScene_ = savedScene;
+
+    // Apply the last-active scene to the engine
+    if (currentScene_ >= 0) {
+        const Scene& sc = SCENES[currentScene_];
+        for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+            fxPatches_[slot].id = sc.fx[slot];
+            compositor_.setFxPatch(slot, sc.fx[slot]);
+            layers_.setFxPatch(slot * 2 + 1, sc.fx[slot]);
+        }
+        controlWin_.setSceneName(sc.name);
+        applySceneToEngine(currentScene_);
+    }
+    std::cout << "[App] State restored from " << statePath() << "\n";
 }
 
 // ── Per-frame ─────────────────────────────────────────────────────────────────
@@ -198,6 +339,7 @@ void App::run() {
         processFrame();
         controlWin_.render(compositeTex_);
     }
+    saveState();
     controlWin_.close();
     perfWin_.close();
 }

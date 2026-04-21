@@ -18,6 +18,23 @@ struct FxPatch {
     float     bandpassHz    = 1000.0f;
 };
 
+// ── SceneState ───────────────────────────────────────────────────────────────
+// Owns all 6-knob values across all 3 modes for a single scene.
+// knobs[modeIdx][knobIdx] = -1.0f means "not yet set" → first physical touch
+// applies directly without any pickup blocking.
+struct SceneState {
+    static constexpr int NMODES = 3;
+    std::array<std::array<float, NUM_KNOBS>, NMODES> knobs;
+
+    void reset() { for (auto& row : knobs) row.fill(-1.0f); }
+
+    // True if at least one knob in the given mode has ever been set.
+    bool hasData(int modeIdx) const {
+        for (float v : knobs[modeIdx]) if (v >= 0.0f) return true;
+        return false;
+    }
+};
+
 // ── App ───────────────────────────────────────────────────────────────────────
 // Top-level orchestrator. Owns all subsystems, wires MIDI → layer state → GPU.
 
@@ -26,10 +43,7 @@ public:
     App();
     ~App();
 
-    // Initialise all subsystems. Returns false on fatal error.
     bool init();
-
-    // Run the main loop until both windows are closed.
     void run();
 
 private:
@@ -46,8 +60,16 @@ private:
     // Current knob mode
     KnobMode knobMode_ = KnobMode::FxParam;
 
-    // Last CC values per knob (0–5)
-    std::array<int, 6> knobCC_ = {};
+    // ── 14 scene state objects — one per MIDI pad (D2…D#3) ───────────────
+    // Each scene is the single source of truth for its knob values.
+    // onKnob() writes directly here; onSceneSelect() reads from here.
+    // No separate "live buffer" to sync — eliminates all sync bugs.
+    std::array<SceneState, NUM_SCENES> scenes_;
+    int currentScene_ = -1;  // -1 = no scene active
+
+    // Last raw physical CC position per knob (0.0–1.0).
+    // Updated on every CC event; used for pickup catch-up detection.
+    std::array<float, NUM_KNOBS> knobLastPhys_;
 
     // Composited pixel output
     std::vector<uint8_t> compositePixels_;
@@ -63,8 +85,21 @@ private:
     // Called by ControlWindow when user drags a knob
     void onKnobDrag(int knobIdx, float normValue);
 
+    // ── Engine helpers ────────────────────────────────────────────────────
+    // Apply one knob value to the correct engine target (no pickup, no display).
+    void applyKnob(int knobIdx, float v, KnobMode mode);
+    // Push all stored values in scenes_[idx] to the engine.
+    void applySceneToEngine(int idx);
+    // Sync all 6 knob arc widgets to the active scene's stored values.
+    void refreshKnobDisplay();
+
     // ── Per-frame ────────────────────────────────────────────────────────
     void processFrame();
     void uploadLayers();
     void syncCompositorState();
+
+    // ── State persistence ────────────────────────────────────────────────
+    void saveState() const;   // writes scenes_ + currentScene_ to ~/.vjay_ace_state
+    void loadState();         // reads file → restores scenes_ + applies to engine
+    static std::string statePath();
 };
