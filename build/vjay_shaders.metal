@@ -261,6 +261,313 @@ kernel void alpha_composite(
     output.write(clamp(result, 0.0f, 1.0f), gid);
 }
 
+// ── pixelate ─────────────────────────────────────────────────────────────────
+// int_params[0] = block_size (2–64)
+kernel void pixelate(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+    int bs = max(1, params.int_params[0]);
+    uint2 block = uint2((gid.x / bs) * bs, (gid.y / bs) * bs);
+    block = clamp(block, uint2(0), uint2(w-1, h-1));
+    output.write(input.read(block), gid);
+}
+
+// ── rainbow_shift ─────────────────────────────────────────────────────────────
+// Full-spectrum HSV rotation travelling across the image.
+// float_params[0] = speed (time multiplier)
+// float_params[1] = wave_scale (spatial frequency of colour bands)
+kernel void rainbow_shift(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+    float4 pixel  = input.read(gid);
+    float  speed  = params.float_params[0];
+    float  wscale = params.float_params[1];
+    float  t      = params.float_params[2]; // elapsed time
+    float  phase  = (float(gid.x) / float(w) + float(gid.y) / float(h)) * wscale
+                    + t * speed;
+    float3 hsv = rgb_to_hsv(pixel.rgb);
+    hsv.x = fmod(hsv.x + phase * 360.0f + 360.0f, 360.0f);
+    hsv.y = min(1.0f, hsv.y + 0.3f);   // boost saturation
+    output.write(clamp(float4(hsv_to_rgb(hsv), pixel.a), 0.0f, 1.0f), gid);
+}
+
+// ── julia_fractal ─────────────────────────────────────────────────────────────
+// Renders a Julia set and blends/multiplies it with the source image.
+// float_params[0] = cx  (-1..1, real part of c)
+// float_params[1] = cy  (-1..1, imag part of c)
+// float_params[2] = blend  (0=source, 1=fractal colour)
+// float_params[3] = time (for animated c)
+kernel void julia_fractal(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    float t    = params.float_params[3];
+    float cx   = params.float_params[0] * cos(t * 0.4f) - params.float_params[1] * sin(t * 0.4f);
+    float cy   = params.float_params[0] * sin(t * 0.4f) + params.float_params[1] * cos(t * 0.4f);
+    float blend = params.float_params[2];
+
+    float2 uv = (float2(gid) / float2(w, h) - 0.5f) * 3.5f;
+    float zx = uv.x, zy = uv.y;
+    int iter = 0, maxIter = 80;
+    while (iter < maxIter && zx*zx + zy*zy < 4.0f) {
+        float tmp = zx*zx - zy*zy + cx;
+        zy = 2.0f * zx * zy + cy;
+        zx = tmp;
+        ++iter;
+    }
+    float norm = float(iter) / float(maxIter);
+    float3 fcolor = hsv_to_rgb(float3(norm * 300.0f + 180.0f, 1.0f, norm < 1.0f ? 1.0f : 0.0f));
+    float4 src = input.read(gid);
+    output.write(clamp(float4(mix(src.rgb, fcolor, blend), src.a), 0.0f, 1.0f), gid);
+}
+
+// ── mold_trails ───────────────────────────────────────────────────────────────
+// GPU physarum-style slime simulation (single-pass approximation):
+// samples 3 sensor directions, computes trail gradient, diffuses.
+// input  = previous trail map (grayscale in R channel)
+// output = new trail map
+// float_params[0] = sensor_angle (radians)
+// float_params[1] = decay (0.9–0.99)
+kernel void mold_trails(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    float sa    = params.float_params[0]; // sensor angle
+    float decay = clamp(params.float_params[1], 0.0f, 0.9999f);
+    float speed = 2.0f;
+
+    // Current heading (derived from a hash of position for deterministic spread)
+    float rng    = rand2(float2(gid) * 0.017f) * 6.28318f;
+    float heading = rng;
+
+    // Sample three sensors (forward, left, right)
+    auto sample = [&](float angle) -> float {
+        float sx = float(gid.x) + cos(heading + angle) * speed * 5.0f;
+        float sy = float(gid.y) + sin(heading + angle) * speed * 5.0f;
+        uint2 sc = uint2(clamp(int(sx),0,w-1), clamp(int(sy),0,h-1));
+        return input.read(sc).r;
+    };
+
+    float fwd   = sample(0.0f);
+    float left  = sample( sa);
+    float right = sample(-sa);
+
+    // Steer towards highest concentration
+    float deposit = 1.0f;
+    if (fwd >= left && fwd >= right) {
+        heading += 0.0f;
+    } else if (left > right) {
+        heading += sa;
+    } else {
+        heading -= sa;
+    }
+
+    // Move and deposit
+    float nx = float(gid.x) + cos(heading) * speed;
+    float ny = float(gid.y) + sin(heading) * speed;
+    uint2 nc = uint2(clamp(int(nx),0,w-1), clamp(int(ny),0,h-1));
+    (void)nc; // deposit handled by diffusion below
+
+    // Diffuse: box blur 3x3 of current trail, then deposit and decay
+    float diffuse = 0.0f;
+    for (int dy2 = -1; dy2 <= 1; ++dy2)
+        for (int dx2 = -1; dx2 <= 1; ++dx2)
+            diffuse += input.read(uint2(clamp(int(gid.x)+dx2,0,w-1),
+                                       clamp(int(gid.y)+dy2,0,h-1))).r;
+    diffuse /= 9.0f;
+
+    float val = (diffuse + deposit * 0.1f) * decay;
+    val = clamp(val, 0.0f, 1.0f);
+    float3 col = hsv_to_rgb(float3(val * 180.0f + 120.0f, 0.9f, val));
+    output.write(float4(col, 1.0f), gid);
+}
+
+// ── feedback_zoom ─────────────────────────────────────────────────────────────
+// Infinite zoom / rotate feedback loop. Read previous frame, zoom+rotate
+// by a small delta, tint, and mix with source.
+// float_params[0] = zoom_delta   (e.g. 1.02 for slow zoom in)
+// float_params[1] = rotate_delta (radians per frame, e.g. 0.01)
+// float_params[2] = feedback_mix (0=source only, 1=full feedback)
+// float_params[3] = tint_hue     (0-360)
+kernel void feedback_zoom(
+    texture2d<float, access::sample> input  [[texture(0)]],
+    texture2d<float, access::write>  output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    float zoom  = params.float_params[0];
+    float rot   = params.float_params[1];
+    float mix_  = params.float_params[2];
+    float hue   = params.float_params[3];
+
+    float cx = float(w) * 0.5f, cy = float(h) * 0.5f;
+    float dx = float(gid.x) - cx, dy = float(gid.y) - cy;
+    // Inverse: where in the input does this output pixel come from?
+    float cosR = cos(rot), sinR = sin(rot);
+    float srcX = (cosR * dx + sinR * dy) / zoom + cx;
+    float srcY = (-sinR * dx + cosR * dy) / zoom + cy;
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
+    float4 feedback = input.sample(s, float2(srcX / float(w), srcY / float(h)));
+
+    // Colour tint the feedback
+    float3 hsv = rgb_to_hsv(feedback.rgb);
+    hsv.x = fmod(hsv.x + hue * 0.5f, 360.0f);
+    feedback.rgb = hsv_to_rgb(hsv);
+
+    // Blend with the original pixel
+    float4 src = input.read(gid);
+    output.write(clamp(mix(src, feedback, mix_), 0.0f, 1.0f), gid);
+}
+
+// ── circle_quilt ──────────────────────────────────────────────────────────────
+// Grid of circles whose radius and colour are driven by luminance.
+// int_params[0]   = grid_cols  (8–64)
+// float_params[0] = radius_scale (0-1 → fraction of cell that max circle fills)
+// float_params[1] = hue_offset (0-360)
+kernel void circle_quilt(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    int cols  = max(4, params.int_params[0]);
+    float rs  = params.float_params[0];
+    float hoff= params.float_params[1];
+
+    // Cell this pixel belongs to
+    float cellW = float(w) / float(cols);
+    float cellH = float(h) / float(cols); // keep cells square-ish
+    int   ci    = int(float(gid.x) / cellW);
+    int   ri    = int(float(gid.y) / cellH);
+    float2 cellCentre = float2((float(ci) + 0.5f) * cellW,
+                                (float(ri) + 0.5f) * cellH);
+    // Sample input at cell centre for representative colour
+    uint2  samplePos = uint2(clamp(int(cellCentre.x),0,w-1),
+                             clamp(int(cellCentre.y),0,h-1));
+    float4 samp = input.read(samplePos);
+    float  lum  = dot(samp.rgb, float3(0.299f, 0.587f, 0.114f));
+
+    float maxRadius = min(cellW, cellH) * 0.5f * rs;
+    float radius    = lum * maxRadius;
+    float dist      = length(float2(gid) - cellCentre);
+
+    if (dist <= radius) {
+        float3 hsv = rgb_to_hsv(samp.rgb);
+        hsv.x = fmod(hsv.x + hoff, 360.0f);
+        hsv.y = min(1.0f, hsv.y + 0.2f);
+        output.write(float4(hsv_to_rgb(hsv), samp.a), gid);
+    } else {
+        output.write(float4(0.05f, 0.05f, 0.08f, 1.0f), gid); // dark bg
+    }
+}
+
+// ── ca_glow ───────────────────────────────────────────────────────────────────
+// Conway-CA-inspired neighbour sum → glow map, overlaid with soft colour.
+// Each pixel "lives" if its luminance exceeds a threshold; neighbours count
+// determine output brightness.
+// float_params[0] = threshold (0-1)
+// float_params[1] = glow_spread (blur radius, integer cast 1-5)
+// float_params[2] = hue_base (0-360)
+kernel void ca_glow(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    float thresh = params.float_params[0];
+    int   spread = max(1, min(5, int(params.float_params[1] * 5.0f + 1.0f)));
+    float hbase  = params.float_params[2];
+
+    // Count live neighbours in spread radius
+    float live = 0.0f, total = 0.0f;
+    for (int dy2 = -spread; dy2 <= spread; ++dy2)
+        for (int dx2 = -spread; dx2 <= spread; ++dx2) {
+            if (dx2 == 0 && dy2 == 0) continue;
+            float4 p = input.read(uint2(clamp(int(gid.x)+dx2,0,w-1),
+                                       clamp(int(gid.y)+dy2,0,h-1)));
+            float lum = dot(p.rgb, float3(0.299f,0.587f,0.114f));
+            if (lum > thresh) live += 1.0f;
+            total += 1.0f;
+        }
+
+    float density = live / max(total, 1.0f);
+    float4 src    = input.read(gid);
+    float  srcLum = dot(src.rgb, float3(0.299f,0.587f,0.114f));
+
+    float3 glowCol = hsv_to_rgb(float3(fmod(hbase + density * 180.0f, 360.0f), 0.9f, density));
+    float  glow    = density * 1.5f;
+    float3 result  = clamp(src.rgb + glowCol * glow, 0.0f, 1.0f);
+    output.write(float4(result, src.a), gid);
+}
+
+// ── bitplane_reactor ──────────────────────────────────────────────────────────
+// Wolfram elementary CA per row: rule applied to bitplane of luminance.
+// Each output row is the next CA generation of the row above.
+// int_params[0]   = rule number (0-255)
+// float_params[0] = threshold for "on" bit (0-1)
+// float_params[1] = colour_hue (0-360 for "alive" cells)
+kernel void bitplane_reactor(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    int   rule   = params.int_params[0] & 0xFF;
+    float thresh = params.float_params[0];
+    float chue   = params.float_params[1];
+
+    // Read three cells from the row above (wrapping)
+    int prevY = int(gid.y) > 0 ? int(gid.y) - 1 : h - 1;
+    auto lum = [&](int x, int y) -> int {
+        float4 p = input.read(uint2(clamp(x,0,w-1), y));
+        return (dot(p.rgb, float3(0.299f,0.587f,0.114f)) > thresh) ? 1 : 0;
+    };
+    int left   = lum(int(gid.x) - 1, prevY);
+    int centre = lum(int(gid.x),     prevY);
+    int right  = lum(int(gid.x) + 1, prevY);
+    int pattern = (left << 2) | (centre << 1) | right;
+    int alive   = (rule >> pattern) & 1;
+
+    float4 src = input.read(gid);
+    float3 col = alive
+        ? hsv_to_rgb(float3(chue, 1.0f, 1.0f))
+        : src.rgb * 0.4f;
+    output.write(float4(col, src.a), gid);
+}
+
 // ── fx_blend ─────────────────────────────────────────────────────────────────
 // Linear mix between the pre-FX source and the FX-processed result.
 // float_params[0] = blend amount  (0 = full source, 1 = full FX)

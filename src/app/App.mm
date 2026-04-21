@@ -95,6 +95,7 @@ bool App::init() {
         controlWin_.setKnobParamName(i, defaultNames[i]);
     controlWin_.setKnobMode(knobMode_);
     refreshKnobDisplay();
+    if (currentScene_ >= 0) refreshKnobParamNames();
 
     return true;
 }
@@ -110,11 +111,15 @@ void App::wireCallbacks() {
         controlWin_.setKnobMode(m);
         static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
         static const char* gainNames[] = {"Gain 1",  "Gain 2",  "Gain 3",  "Gain 4",  "Gain 5",  "Gain 6"};
-        static const char* fxNames[]   = {"FX-1 P1", "FX-1 P2", "FX-2 P1", "FX-2 P2", "FX-3 P1", "FX-3 P2"};
-        const char** names = (m == KnobMode::LayerLevel) ? opNames
-                           : (m == KnobMode::FxAudio)    ? gainNames : fxNames;
-        for (int i = 0; i < NUM_KNOBS; ++i)
-            controlWin_.setKnobParamName(i, names[i]);
+        if (m == KnobMode::LayerLevel) {
+            for (int i = 0; i < NUM_KNOBS; ++i)
+                controlWin_.setKnobParamName(i, opNames[i]);
+        } else if (m == KnobMode::FxAudio) {
+            for (int i = 0; i < NUM_KNOBS; ++i)
+                controlWin_.setKnobParamName(i, gainNames[i]);
+        } else {
+            refreshKnobParamNames();
+        }
         refreshKnobDisplay();
     };
     controlWin_.onKnobDrag = [this](int knob, float v){ onKnobDrag(knob, v); };
@@ -125,17 +130,19 @@ void App::wireCallbacks() {
         static const char* zoomNames[] = {"Zoom L0","Zoom L2","Zoom L4","-","-","-"};
         static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
         static const char* gainNames[] = {"Gain 1", "Gain 2", "Gain 3", "Gain 4", "Gain 5", "Gain 6"};
-        static const char* fxNames[]   = {"FX-1 P1","FX-1 P2","FX-2 P1","FX-2 P2","FX-3 P1","FX-3 P2"};
         KnobMode eff = effectiveMode();
         controlWin_.setKnobMode(eff);
-        const char** names;
-        if      (eff == KnobMode::ImgRotate)  names = rotNames;
-        else if (eff == KnobMode::ImgZoom)    names = zoomNames;
-        else if (eff == KnobMode::LayerLevel) names = opNames;
-        else if (eff == KnobMode::FxAudio)    names = gainNames;
-        else                                  names = fxNames;
-        for (int i = 0; i < NUM_KNOBS; ++i)
-            controlWin_.setKnobParamName(i, names[i]);
+        if (eff == KnobMode::ImgRotate) {
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, rotNames[i]);
+        } else if (eff == KnobMode::ImgZoom) {
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, zoomNames[i]);
+        } else if (eff == KnobMode::LayerLevel) {
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, opNames[i]);
+        } else if (eff == KnobMode::FxAudio) {
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gainNames[i]);
+        } else {
+            refreshKnobParamNames();
+        }
         refreshKnobDisplay();
     };
 
@@ -200,6 +207,20 @@ void App::applySceneToEngine(int idx) {
             if (s.knobs[mi][k] >= 0.0f)
                 applyKnob(k, s.knobs[mi][k], mode);
         }
+    }
+}
+
+// ── Update knob param name labels from active scene's FX patches ──────────────
+
+void App::refreshKnobParamNames() {
+    if (currentScene_ < 0) return;
+    const Scene& sc = SCENES[currentScene_];
+    // Knobs 0-1 → FX slot 0, knobs 2-3 → FX slot 1, knobs 4-5 → FX slot 2
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+        FxPatchId patch = sc.fx[slot];
+        std::string prefix = std::string(fxPatchName(patch)) + " ";
+        controlWin_.setKnobParamName(slot * 2,     prefix + fxParamName(patch, 0));
+        controlWin_.setKnobParamName(slot * 2 + 1, prefix + fxParamName(patch, 1));
     }
 }
 
@@ -303,6 +324,8 @@ void App::onSceneSelect(int sceneIdx) {
 
     // 3. Refresh the software knob arcs to show what is actually applied.
     refreshKnobDisplay();
+    // 4. Update knob param name labels to reflect the new scene's FX patches.
+    refreshKnobParamNames();
 }
 
 // ── GUI knob drag ─────────────────────────────────────────────────────────────

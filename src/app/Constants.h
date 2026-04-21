@@ -76,6 +76,13 @@ enum class FxPatchId : int {
     EdgeInk        = 8,
     MoldTrails     = 9,
     Fractal        = 10,
+    Pixelate       = 11,
+    RainbowShift   = 12,
+    JuliaFractal   = 13,
+    FeedbackZoom   = 14,
+    CircleQuilt    = 15,
+    CAGlow         = 16,
+    BitplaneReactor= 17,
     COUNT
 };
 
@@ -92,7 +99,54 @@ inline const char* fxPatchName(FxPatchId id) {
         case FxPatchId::EdgeInk:        return "Edge Ink";
         case FxPatchId::MoldTrails:     return "Mold Trails";
         case FxPatchId::Fractal:        return "Fractal";
+        case FxPatchId::Pixelate:       return "Pixelate";
+        case FxPatchId::RainbowShift:   return "Rainbow";
+        case FxPatchId::JuliaFractal:   return "Julia";
+        case FxPatchId::FeedbackZoom:   return "Feedback Zoom";
+        case FxPatchId::CircleQuilt:    return "Circle Quilt";
+        case FxPatchId::CAGlow:         return "CA Glow";
+        case FxPatchId::BitplaneReactor:return "Bitplane";
         default:                        return "???";
+    }
+}
+
+// Returns descriptive label for each of the two knob params of an FX patch.
+// paramIdx: 0 = first knob, 1 = second knob.
+inline const char* fxParamName(FxPatchId id, int paramIdx) {
+    switch (id) {
+        case FxPatchId::Blur:
+            return paramIdx == 0 ? "Kernel Size" : "-";
+        case FxPatchId::ChromaticAberr:
+            return paramIdx == 0 ? "Offset (px)" : "-";
+        case FxPatchId::HueCycle:
+            return paramIdx == 0 ? "Speed" : "Time Offset";
+        case FxPatchId::VideoGlitch:
+            return paramIdx == 0 ? "Displace" : "Chan Shift";
+        case FxPatchId::Kaleidoscope:
+            return paramIdx == 0 ? "Segments" : "Rotation";
+        case FxPatchId::WaveDistort:
+            return paramIdx == 0 ? "Amplitude" : "Frequency";
+        case FxPatchId::EdgeInk:
+            return paramIdx == 0 ? "Threshold" : "Edge Strength";
+        case FxPatchId::MoldTrails:
+            return paramIdx == 0 ? "Sensor Angle" : "Decay";
+        case FxPatchId::Fractal:
+        case FxPatchId::JuliaFractal:
+            return paramIdx == 0 ? "C real" : "C imag";
+        case FxPatchId::Pixelate:
+            return paramIdx == 0 ? "Block Size" : "-";
+        case FxPatchId::RainbowShift:
+            return paramIdx == 0 ? "Speed" : "Wave Scale";
+        case FxPatchId::FeedbackZoom:
+            return paramIdx == 0 ? "Zoom Delta" : "Rotate Delta";
+        case FxPatchId::CircleQuilt:
+            return paramIdx == 0 ? "Grid Cols" : "Radius Scale";
+        case FxPatchId::CAGlow:
+            return paramIdx == 0 ? "Threshold" : "Glow Spread";
+        case FxPatchId::BitplaneReactor:
+            return paramIdx == 0 ? "CA Rule" : "Threshold";
+        default:
+            return paramIdx == 0 ? "P1" : "P2";
     }
 }
 
@@ -137,68 +191,68 @@ inline constexpr Scene SCENES[NUM_SCENES] = {
       { FxPatchId::Passthrough, FxPatchId::Passthrough, FxPatchId::Passthrough },
       { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
 
-    // 01  D#2  – soft blur over everything
-    { "Blur Haze",
-      { FxPatchId::Blur, FxPatchId::Blur, FxPatchId::None },
+    // 01  D#2  – kaleidoscope + slow hue rotation
+    { "Kaleidoscope",
+      { FxPatchId::Kaleidoscope, FxPatchId::HueCycle, FxPatchId::Passthrough },
+      { {0.5f,0.2f}, {0.2f,0.5f}, {0.5f,0.5f} } },
+
+    // 02  E2   – rainbow colour wash over all layers
+    { "Rainbow",
+      { FxPatchId::RainbowShift, FxPatchId::RainbowShift, FxPatchId::RainbowShift },
+      { {0.5f,0.5f}, {0.3f,0.7f}, {0.7f,0.3f} } },
+
+    // 03  F2   – beat-ready pixelate on slot 0, hue on others
+    { "Pixelate",
+      { FxPatchId::Pixelate, FxPatchId::HueCycle, FxPatchId::Passthrough },
       { {0.3f,0.5f}, {0.2f,0.5f}, {0.5f,0.5f} } },
 
-    // 02  E2   – chromatic aberration on slot 0
-    { "Chroma Drift",
-      { FxPatchId::ChromaticAberr, FxPatchId::None, FxPatchId::None },
-      { {0.6f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+    // 04  F#2  – julia fractal overlay + chromatic on top
+    { "Julia",
+      { FxPatchId::JuliaFractal, FxPatchId::ChromaticAberr, FxPatchId::Passthrough },
+      { {0.6f,0.4f}, {0.5f,0.5f}, {0.5f,0.5f} } },
 
-    // 03  F2   – slow hue rotation on all slots
-    { "Hue Wash",
-      { FxPatchId::HueCycle, FxPatchId::HueCycle, FxPatchId::HueCycle },
-      { {0.2f,0.5f}, {0.5f,0.5f}, {0.8f,0.5f} } },
+    // 05  G2   – glitch storm: glitch + wave + chroma
+    { "Glitch Storm",
+      { FxPatchId::VideoGlitch, FxPatchId::WaveDistort, FxPatchId::ChromaticAberr },
+      { {0.6f,0.5f}, {0.4f,0.3f}, {0.5f,0.5f} } },
 
-    // 04  F#2  – glitch on slot 0 only
-    { "Glitch Solo",
-      { FxPatchId::VideoGlitch, FxPatchId::None, FxPatchId::None },
-      { {0.5f,0.4f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+    // 06  G#2  – feedback zoom loop (infinite tunnel)
+    { "Feedback Tunnel",
+      { FxPatchId::FeedbackZoom, FxPatchId::HueCycle, FxPatchId::Passthrough },
+      { {0.5f,0.3f}, {0.2f,0.5f}, {0.5f,0.5f} } },
 
-    // 05  G2   – heavy glitch on all slots
-    { "Full Glitch",
-      { FxPatchId::VideoGlitch, FxPatchId::VideoGlitch, FxPatchId::VideoGlitch },
-      { {0.7f,0.6f}, {0.5f,0.5f}, {0.3f,0.4f} } },
+    // 07  A2   – circle quilt spectral visualiser
+    { "Circle Quilt",
+      { FxPatchId::CircleQuilt, FxPatchId::Passthrough, FxPatchId::Passthrough },
+      { {0.5f,0.8f}, {0.5f,0.5f}, {0.5f,0.5f} } },
 
-    // 06  G#2  – kaleidoscope top layer
-    { "Kaleidoscope",
-      { FxPatchId::None, FxPatchId::None, FxPatchId::Kaleidoscope },
-      { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.3f} } },
+    // 08  A#2  – CA glow on all layers
+    { "CA Glow",
+      { FxPatchId::CAGlow, FxPatchId::CAGlow, FxPatchId::Passthrough },
+      { {0.4f,0.5f}, {0.6f,0.3f}, {0.5f,0.5f} } },
 
-    // 07  A2   – wave distortion
-    { "Wave",
-      { FxPatchId::WaveDistort, FxPatchId::None, FxPatchId::None },
-      { {0.5f,0.4f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+    // 09  B2   – Wolfram bitplane reactor
+    { "Bitplane",
+      { FxPatchId::BitplaneReactor, FxPatchId::Passthrough, FxPatchId::HueCycle },
+      { {0.72f,0.5f}, {0.5f,0.5f}, {0.3f,0.5f} } },
 
-    // 08  A#2  – edge ink / Sobel outline
-    { "Ink Outline",
-      { FxPatchId::EdgeInk, FxPatchId::None, FxPatchId::None },
-      { {0.5f,0.6f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+    // 10  C3   – soft blur haze
+    { "Blur Haze",
+      { FxPatchId::Blur, FxPatchId::Blur, FxPatchId::Passthrough },
+      { {0.3f,0.5f}, {0.2f,0.5f}, {0.5f,0.5f} } },
 
-    // 09  B2   – mold trails simulation
-    { "Mold Trails",
-      { FxPatchId::MoldTrails, FxPatchId::None, FxPatchId::None },
-      { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+    // 11  C#3  – edge ink + rainbow
+    { "Ink Rainbow",
+      { FxPatchId::EdgeInk, FxPatchId::RainbowShift, FxPatchId::Passthrough },
+      { {0.4f,0.7f}, {0.5f,0.6f}, {0.5f,0.5f} } },
 
-    // 10  C3   – fractal zoom
-    { "Fractal",
-      { FxPatchId::Fractal, FxPatchId::None, FxPatchId::None },
-      { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
+    // 12  D3   – julia + feedback + CA glow (deep audio-reactive)
+    { "Deep Space",
+      { FxPatchId::JuliaFractal, FxPatchId::FeedbackZoom, FxPatchId::CAGlow },
+      { {0.5f,0.3f}, {0.4f,0.2f}, {0.5f,0.6f} } },
 
-    // 11  C#3  – chroma + hue combo
-    { "Prisma",
-      { FxPatchId::ChromaticAberr, FxPatchId::HueCycle, FxPatchId::None },
-      { {0.6f,0.5f}, {0.3f,0.5f}, {0.5f,0.5f} } },
-
-    // 12  D3   – glitch + wave + ink
-    { "Storm",
-      { FxPatchId::VideoGlitch, FxPatchId::WaveDistort, FxPatchId::EdgeInk },
-      { {0.6f,0.5f}, {0.5f,0.4f}, {0.5f,0.7f} } },
-
-    // 13  D#3  – mold + hue + fractal deep
-    { "Deep",
-      { FxPatchId::MoldTrails, FxPatchId::HueCycle, FxPatchId::Fractal },
-      { {0.5f,0.5f}, {0.4f,0.5f}, {0.5f,0.6f} } },
+    // 13  D#3  – kitchen sink: everything layered
+    { "Total Chaos",
+      { FxPatchId::VideoGlitch, FxPatchId::Kaleidoscope, FxPatchId::BitplaneReactor },
+      { {0.7f,0.6f}, {0.5f,0.3f}, {0.85f,0.5f} } },
 };

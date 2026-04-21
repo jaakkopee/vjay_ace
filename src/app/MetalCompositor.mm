@@ -64,6 +64,13 @@ bool MetalCompositor::init() {
     psoRotate_       = makePSO(@"rotate_source");
     psoZoom_         = makePSO(@"zoom_source");
     psoFxBlend_      = makePSO(@"fx_blend");
+    psoPixelate_     = makePSO(@"pixelate");
+    psoRainbow_      = makePSO(@"rainbow_shift");
+    psoJulia_        = makePSO(@"julia_fractal");
+    psoFeedback_     = makePSO(@"feedback_zoom");
+    psoCircleQuilt_  = makePSO(@"circle_quilt");
+    psoCAGlow_       = makePSO(@"ca_glow");
+    psoBitplane_     = makePSO(@"bitplane_reactor");
 
     // Allocate layer textures
     for (int i = 0; i < NUM_LAYERS; ++i)
@@ -254,6 +261,60 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
             break;
         default:
             pso = psoPassthrough_;
+            break;
+        case FxPatchId::Pixelate:
+            pso = psoPixelate_;
+            params.int_params[0] = 2 + static_cast<int>(p0 * 62); // block 2-64
+            break;
+        case FxPatchId::RainbowShift:
+            pso = psoRainbow_;
+            params.float_params[0] = p0 * 3.0f;    // speed
+            params.float_params[1] = p1 * 4.0f;    // wave scale
+            params.float_params[2] = t;             // time
+            break;
+        case FxPatchId::JuliaFractal:
+            pso = psoJulia_;
+            params.float_params[0] = p0 * 2.0f - 1.0f; // cx -1..1
+            params.float_params[1] = p1 * 2.0f - 1.0f; // cy -1..1
+            params.float_params[2] = 0.6f;              // blend
+            params.float_params[3] = t;                 // time
+            break;
+        case FxPatchId::FeedbackZoom:
+            pso = psoFeedback_;
+            params.float_params[0] = 1.0f + p0 * 0.05f; // zoom delta 1.0-1.05
+            params.float_params[1] = p1 * 0.05f;         // rotate delta
+            params.float_params[2] = 0.85f;              // feedback mix
+            params.float_params[3] = 30.0f;              // tint hue offset
+            break;
+        case FxPatchId::CircleQuilt:
+            pso = psoCircleQuilt_;
+            params.int_params[0]   = 8 + static_cast<int>(p0 * 56); // cols 8-64
+            params.float_params[0] = 0.5f + p1 * 0.5f; // radius_scale 0.5-1.0
+            params.float_params[1] = p0 * 180.0f;       // hue_offset
+            break;
+        case FxPatchId::CAGlow:
+            pso = psoCAGlow_;
+            params.float_params[0] = p0;             // threshold
+            params.float_params[1] = p1;             // glow spread (0-1)
+            params.float_params[2] = t * 20.0f;     // animated hue base
+            break;
+        case FxPatchId::BitplaneReactor:
+            pso = psoBitplane_;
+            params.int_params[0]   = static_cast<int>(p0 * 255.0f); // rule 0-255
+            params.float_params[0] = 0.3f + p1 * 0.5f;             // threshold
+            params.float_params[1] = fmod(t * 30.0f, 360.0f);      // animated hue
+            break;
+        case FxPatchId::Fractal:
+            // legacy: reuse julia with fixed params
+            pso = psoJulia_;
+            params.float_params[0] = -0.7f;
+            params.float_params[1] =  0.27f;
+            params.float_params[2] =  0.7f;
+            params.float_params[3] =  t;
+            break;
+        case FxPatchId::MoldTrails:
+            pso = psoPassthrough_; // mold_trails kernel needs state — use passthrough for now
+            break;
     }
 
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];

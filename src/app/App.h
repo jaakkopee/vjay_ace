@@ -111,6 +111,8 @@ private:
     void applySceneToEngine(int idx);
     // Sync all 6 knob arc widgets to the active scene's stored values.
     void refreshKnobDisplay();
+    // Update knob param name labels based on active scene's FX patches.
+    void refreshKnobParamNames();
 
     // ── Per-frame ────────────────────────────────────────────────────────
     void processFrame();
