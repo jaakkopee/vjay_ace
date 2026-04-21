@@ -261,6 +261,22 @@ kernel void alpha_composite(
     output.write(clamp(result, 0.0f, 1.0f), gid);
 }
 
+// ── fx_blend ─────────────────────────────────────────────────────────────────
+// Linear mix between the pre-FX source and the FX-processed result.
+// float_params[0] = blend amount  (0 = full source, 1 = full FX)
+// Texture bindings: 0=source (pre-FX), 1=fx (post-FX), 2=output
+kernel void fx_blend(
+    texture2d<float, access::read>  src    [[texture(0)]],
+    texture2d<float, access::read>  fx     [[texture(1)]],
+    texture2d<float, access::write> output [[texture(2)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= src.get_width() || gid.y >= src.get_height()) return;
+    float t = clamp(params.float_params[0], 0.0f, 1.0f);
+    output.write(mix(src.read(gid), fx.read(gid), t), gid);
+}
+
 // ── readback_rgba8 ───────────────────────────────────────────────────────
 // Converts RGBA16Float texture to a packed RGBA8 CPU-readable byte buffer.
 // Avoids the Metal restriction that blit copies require matching pixel formats.

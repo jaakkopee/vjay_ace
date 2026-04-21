@@ -63,6 +63,7 @@ bool MetalCompositor::init() {
     psoReadback_     = makePSO(@"readback_rgba8");
     psoRotate_       = makePSO(@"rotate_source");
     psoZoom_         = makePSO(@"zoom_source");
+    psoFxBlend_      = makePSO(@"fx_blend");
 
     // Allocate layer textures
     for (int i = 0; i < NUM_LAYERS; ++i)
@@ -339,6 +340,31 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
         }
         // 3. FX pass on fully-transformed source
         runFxPass(cmd, slot, zoomTex_[slot], layerTex_[li]);
+        // 4. Blend FX output with pre-FX source using the FX layer's opacity.
+        //    opacity_[li] == 1.0 → full FX; 0.0 → unprocessed source.
+        if (psoFxBlend_) {
+            ShaderParams bp{};
+            bp.float_params[0] = opacity_[li];
+            id<MTLComputeCommandEncoder> benc = [cmd computeCommandEncoder];
+            [benc setComputePipelineState:psoFxBlend_];
+            [benc setTexture:zoomTex_[slot] atIndex:0]; // pre-FX
+            [benc setTexture:layerTex_[li]  atIndex:1]; // post-FX
+            [benc setTexture:scratch_[1]    atIndex:2]; // temp output
+            [benc setBytes:&bp length:sizeof(bp) atIndex:0];
+            MTLSize bthr = {psoFxBlend_.threadExecutionWidth, 8, 1};
+            MTLSize bgrp = {(WORK_W + bthr.width  - 1) / bthr.width,
+                            (WORK_H + bthr.height - 1) / bthr.height, 1};
+            [benc dispatchThreadgroups:bgrp threadsPerThreadgroup:bthr];
+            [benc endEncoding];
+            // Commit blend result back into the FX layer texture.
+            id<MTLBlitCommandEncoder> blitFx = [cmd blitCommandEncoder];
+            [blitFx copyFromTexture:scratch_[1] sourceSlice:0 sourceLevel:0
+                       sourceOrigin:MTLOriginMake(0,0,0)
+                         sourceSize:MTLSizeMake(WORK_W, WORK_H, 1)
+                          toTexture:layerTex_[li] destinationSlice:0 destinationLevel:0
+             destinationOrigin:MTLOriginMake(0,0,0)];
+            [blitFx endEncoding];
+        }
     }
 
     // Composite: group0 = (layer0 modulated by layer1), etc.

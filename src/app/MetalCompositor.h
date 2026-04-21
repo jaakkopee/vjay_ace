@@ -90,6 +90,7 @@ private:
     id<MTLComputePipelineState> psoReadback_     = nil;
     id<MTLComputePipelineState> psoRotate_       = nil;
     id<MTLComputePipelineState> psoZoom_         = nil;
+    id<MTLComputePipelineState> psoFxBlend_      = nil;
 
     // Per-source-slot rotation textures and angles
     id<MTLTexture>              rotateTex_[NUM_SRC_LAYERS] = {nil, nil, nil};

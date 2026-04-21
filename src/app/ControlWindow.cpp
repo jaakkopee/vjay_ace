@@ -180,6 +180,9 @@ void ControlWindow::onMouseMoved(float /*x*/, float y) {
     if (!drag_.active) return;
     float delta = drag_.startY - y;   // drag up = increase
     int newCC = std::clamp(static_cast<int>(drag_.startCC + delta), 0, 127);
+    // Re-anchor each frame so there is no dead zone when a limit is hit.
+    drag_.startCC = newCC;
+    drag_.startY  = y;
     setKnobValue(drag_.knob, newCC);
     if (onKnobDrag) onKnobDrag(drag_.knob, ccToNorm(newCC));
 }
