@@ -101,6 +101,8 @@ enum class KnobMode {
     LayerLevel,   // C2  held: knobs 0-5 → layer opacities (layers 1-6)
     FxAudio,      // C#2 held: knobs 0-2 → FX audio gain; knobs 3-5 → FX bandpass freq
     FxParam,      // default: knobs control active FX patch params 1 & 2 per FX layer
+    ImgRotate,    // R key held: knobs 0-2 → rotation (0–2π) for layers 0, 2, 4
+    ImgZoom,      // Z key held: knobs 0-2 → zoom factor for layers 0, 2, 4
 };
 
 // ── Per-layer state (plain data, owned by LayerManager) ────────────────────

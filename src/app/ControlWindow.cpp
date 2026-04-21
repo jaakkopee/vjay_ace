@@ -153,7 +153,7 @@ void ControlWindow::setSceneName(const std::string& name) {
 }
 
 void ControlWindow::setKnobMode(KnobMode mode) {
-    static const char* names[] = {"Layer Opacity", "Audio Gain", "FX Param"};
+    static const char* names[] = {"Layer Opacity", "Audio Gain", "FX Param", "Img Rotate", "Img Zoom"};
     if (modeLabel_)
         modeLabel_->setText(std::string("Mode: ") + names[static_cast<int>(mode)]
                             + "  |  CC: 3  9  12  13  14  15");
@@ -197,11 +197,23 @@ bool ControlWindow::handleEvents() {
         if (const auto* mm = event->getIf<sf::Event::MouseMoved>())
             onMouseMoved(static_cast<float>(mm->position.x),
                          static_cast<float>(mm->position.y));
+        if (const auto* kp = event->getIf<sf::Event::KeyPressed>()) {
+            (void)kp; // key state is polled in update() instead
+        }
+        if (const auto* kr = event->getIf<sf::Event::KeyReleased>()) {
+            (void)kr;
+        }
     }
     return true;
 }
 
-void ControlWindow::update() {}
+void ControlWindow::update() {
+    // Poll R and Z key state each frame — robust against TGUI consuming key events.
+    bool rNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R);
+    bool zNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z);
+    if (rNow != rKeyWas_) { rKeyWas_ = rNow; if (onRKey) onRKey(rNow); }
+    if (zNow != zKeyWas_) { zKeyWas_ = zNow; if (onZKey) onZKey(zNow); }
+}
 
 void ControlWindow::render(const sf::Texture& compositePreview) {
     window_.clear(sf::Color(16, 16, 20));

@@ -45,6 +45,12 @@ public:
     // Set layer opacity (0.0–1.0).
     void setLayerOpacity(int layerIdx, float opacity);
 
+    // Set rotation (radians) for a source layer slot (0=layer0, 1=layer2, 2=layer4).
+    void setLayerRotation(int srcSlot, float radians);
+
+    // Set zoom factor for a source layer slot (1.0 = no zoom; >1 = zoom in; <1 = zoom out).
+    void setLayerZoom(int srcSlot, float factor);
+
     // Composite all layers into outputTexture and return a CPU RGBA8 snapshot
     // at WORK_W x WORK_H for blit into the SFML window.
     // Returns false if not initialised.
@@ -82,6 +88,16 @@ private:
     id<MTLComputePipelineState> psoWave_         = nil;
     id<MTLComputePipelineState> psoEdgeInk_      = nil;
     id<MTLComputePipelineState> psoReadback_     = nil;
+    id<MTLComputePipelineState> psoRotate_       = nil;
+    id<MTLComputePipelineState> psoZoom_         = nil;
+
+    // Per-source-slot rotation textures and angles
+    id<MTLTexture>              rotateTex_[NUM_SRC_LAYERS] = {nil, nil, nil};
+    float                       rotations_[NUM_SRC_LAYERS] = {0.0f, 0.0f, 0.0f};
+
+    // Per-source-slot zoom textures and factors (1.0 = no change)
+    id<MTLTexture>              zoomTex_[NUM_SRC_LAYERS]   = {nil, nil, nil};
+    float                       zooms_[NUM_SRC_LAYERS]     = {1.0f, 1.0f, 1.0f};
 
     std::array<float, NUM_LAYERS>          opacity_  = {1,1,1,1,1,1};
     std::array<FxPatchId, NUM_FX_LAYERS>   patches_  = {};

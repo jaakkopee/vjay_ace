@@ -24,7 +24,7 @@ struct FxPatch {
 // knobs[modeIdx][knobIdx] = -1.0f means "not yet set" → first physical touch
 // applies directly without any pickup blocking.
 struct SceneState {
-    static constexpr int NMODES = 3;
+    static constexpr int NMODES = 5;  // LayerLevel, FxAudio, FxParam, ImgRotate, ImgZoom
     std::array<std::array<float, NUM_KNOBS>, NMODES> knobs;
 
     // Per-scene image paths for src layers 0, 2, 4 (slots 0, 1, 2)
@@ -66,7 +66,16 @@ private:
     std::array<FxPatch, NUM_FX_LAYERS> fxPatches_;
 
     // Current knob mode
-    KnobMode knobMode_ = KnobMode::FxParam;
+    KnobMode knobMode_  = KnobMode::FxParam;
+    bool     rKeyHeld_  = false;  // R held → ImgRotate overrides knobMode_
+    bool     zKeyHeld_  = false;  // Z held → ImgZoom overrides knobMode_
+
+    // Returns the effective mode considering modifier keys.
+    KnobMode effectiveMode() const {
+        if (rKeyHeld_) return KnobMode::ImgRotate;
+        if (zKeyHeld_) return KnobMode::ImgZoom;
+        return knobMode_;
+    }
 
     // ── 14 scene state objects — one per MIDI pad (D2…D#3) ───────────────
     // Each scene is the single source of truth for its knob values.

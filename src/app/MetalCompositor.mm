@@ -61,6 +61,8 @@ bool MetalCompositor::init() {
     psoEdgeInk_      = makePSO(@"edge_ink");
     psoComposite_    = makePSO(@"alpha_composite");
     psoReadback_     = makePSO(@"readback_rgba8");
+    psoRotate_       = makePSO(@"rotate_source");
+    psoZoom_         = makePSO(@"zoom_source");
 
     // Allocate layer textures
     for (int i = 0; i < NUM_LAYERS; ++i)
@@ -69,6 +71,12 @@ bool MetalCompositor::init() {
     scratch_[0] = makeTexture(WORK_W, WORK_H);
     scratch_[1] = makeTexture(WORK_W, WORK_H);
     outputTex_  = makeTexture(WORK_W, WORK_H);
+
+    // Per-source-slot rotation and zoom output textures
+    for (int s = 0; s < NUM_SRC_LAYERS; ++s) {
+        rotateTex_[s] = makeTexture(WORK_W, WORK_H);
+        zoomTex_[s]   = makeTexture(WORK_W, WORK_H);
+    }
 
     // CPU-readable buffer for readback (RGBA8, 4 bytes/pixel)
     NSUInteger readbackSize = WORK_W * WORK_H * 4;
@@ -154,6 +162,16 @@ void MetalCompositor::setFxParams(int fxLayerIdx, float p0, float p1) {
 void MetalCompositor::setLayerOpacity(int layerIdx, float opacity) {
     assert(layerIdx >= 0 && layerIdx < NUM_LAYERS);
     opacity_[layerIdx] = opacity;
+}
+
+void MetalCompositor::setLayerRotation(int srcSlot, float radians) {
+    assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
+    rotations_[srcSlot] = radians;
+}
+
+void MetalCompositor::setLayerZoom(int srcSlot, float factor) {
+    assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
+    zooms_[srcSlot] = (factor > 0.001f) ? factor : 0.001f;
 }
 
 // ── dispatch helper ───────────────────────────────────────────────────────────
@@ -298,12 +316,29 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
     id<MTLCommandBuffer> cmd = [cmdQueue_ commandBuffer];
 
     // For each FX slot (0=layer1, 1=layer3, 2=layer5):
-    //   src = layerTex_[fxLayerIdx - 1]  (processed even layer below)
-    //   dst = layerTex_[fxLayerIdx]       (FX output stored back in odd slot)
+    //   1. Rotate the source layer into rotateTex_[slot]
+    //   2. Run FX pass: rotateTex_[slot] → layerTex_[fxLayerIdx]
     const int fxLayerIndices[NUM_FX_LAYERS] = {1, 3, 5};
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
         int li = fxLayerIndices[slot];
-        runFxPass(cmd, slot, layerTex_[li - 1], layerTex_[li]);
+        // 1. Rotation pre-pass
+        {
+            ShaderParams rp{};
+            rp.float_params[0] = rotations_[slot];
+            id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+            dispatch(enc, psoRotate_, layerTex_[li - 1], rotateTex_[slot], rp);
+            [enc endEncoding];
+        }
+        // 2. Zoom pre-pass (rotate output → zoom output)
+        {
+            ShaderParams zp{};
+            zp.float_params[0] = zooms_[slot];
+            id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+            dispatch(enc, psoZoom_, rotateTex_[slot], zoomTex_[slot], zp);
+            [enc endEncoding];
+        }
+        // 3. FX pass on fully-transformed source
+        runFxPass(cmd, slot, zoomTex_[slot], layerTex_[li]);
     }
 
     // Composite: group0 = (layer0 modulated by layer1), etc.

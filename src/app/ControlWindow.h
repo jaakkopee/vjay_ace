@@ -56,6 +56,12 @@ public:
     // Fired when user drags a knob: knobIdx 0-5, normValue 0.0-1.0
     std::function<void(int knobIdx, float normValue)> onKnobDrag;
 
+    // Fired when the R key is pressed (true) or released (false)
+    std::function<void(bool pressed)> onRKey;
+
+    // Fired when the Z key is pressed (true) or released (false)
+    std::function<void(bool pressed)> onZKey;
+
 private:
     sf::RenderWindow window_;
     tgui::Gui        gui_;
@@ -81,6 +87,10 @@ private:
         int   startCC = 0;
         float startY  = 0.0f;
     } drag_;
+
+    // Key polling state (previous frame)
+    bool rKeyWas_ = false;
+    bool zKeyWas_ = false;
 
     void buildGui(int width, int height);
     void drawKnob(int knobIdx);

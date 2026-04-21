@@ -278,3 +278,68 @@ kernel void readback_rgba8(
     output[idx+2] = uchar(c.b * 255.0f + 0.5f);
     output[idx+3] = uchar(c.a * 255.0f + 0.5f);
 }
+
+// ── rotate_source ────────────────────────────────────────────────────────────
+// Rotates a source texture around its centre by float_params[0] radians.
+// Uses bilinear sampling; pixels outside the rotated area become transparent black.
+kernel void rotate_source(
+    texture2d<float, access::sample> input  [[texture(0)]],
+    texture2d<float, access::write>  output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    float angle = params.float_params[0];
+    float cosA  = cos(angle);
+    float sinA  = sin(angle);
+    float cx    = float(w) * 0.5f;
+    float cy    = float(h) * 0.5f;
+
+    // Inverse rotation: find which input pixel maps to this output pixel
+    float dx   = float(gid.x) - cx;
+    float dy   = float(gid.y) - cy;
+    float srcX = cosA * dx + sinA * dy + cx;
+    float srcY = -sinA * dx + cosA * dy + cy;
+
+    if (srcX < 0.0f || srcX >= float(w) || srcY < 0.0f || srcY >= float(h)) {
+        output.write(float4(0.0f), gid);
+        return;
+    }
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
+    float2 uv = float2(srcX / float(w), srcY / float(h));
+    output.write(input.sample(s, uv), gid);
+}
+
+// ── zoom_source ───────────────────────────────────────────────────────────────
+// Zooms a source texture around its centre.
+// float_params[0] = zoom factor (1.0 = no change, >1 = zoom in, <1 = zoom out)
+// Pixels outside the source area are transparent black.
+kernel void zoom_source(
+    texture2d<float, access::sample> input  [[texture(0)]],
+    texture2d<float, access::write>  output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    float zoom = params.float_params[0];
+    float cx   = float(w) * 0.5f;
+    float cy   = float(h) * 0.5f;
+
+    // Inverse mapping: find which input pixel maps to this output pixel
+    float srcX = cx + (float(gid.x) - cx) / zoom;
+    float srcY = cy + (float(gid.y) - cy) / zoom;
+
+    if (srcX < 0.0f || srcX >= float(w) || srcY < 0.0f || srcY >= float(h)) {
+        output.write(float4(0.0f), gid);
+        return;
+    }
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
+    float2 uv = float2(srcX / float(w), srcY / float(h));
+    output.write(input.sample(s, uv), gid);
+}
