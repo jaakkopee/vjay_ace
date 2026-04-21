@@ -27,11 +27,32 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
     avcodec_parameters_to_context(codecCtx_, stream->codecpar);
     if (avcodec_open2(codecCtx_, codec, nullptr) < 0) { close(); return false; }
 
+    // Map deprecated "yuvj*" full-range formats to their standard equivalents
+    // and record whether the source is full-range so we can tell swscale.
+    AVPixelFormat srcFmt   = codecCtx_->pix_fmt;
+    bool          fullRange = false;
+    switch (srcFmt) {
+        case AV_PIX_FMT_YUVJ420P:  srcFmt = AV_PIX_FMT_YUV420P;  fullRange = true; break;
+        case AV_PIX_FMT_YUVJ422P:  srcFmt = AV_PIX_FMT_YUV422P;  fullRange = true; break;
+        case AV_PIX_FMT_YUVJ444P:  srcFmt = AV_PIX_FMT_YUV444P;  fullRange = true; break;
+        case AV_PIX_FMT_YUVJ440P:  srcFmt = AV_PIX_FMT_YUV440P;  fullRange = true; break;
+        case AV_PIX_FMT_YUVJ411P:  srcFmt = AV_PIX_FMT_YUV411P;  fullRange = true; break;
+        default: break;
+    }
+
     swsCtx_ = sws_getContext(
-        codecCtx_->width, codecCtx_->height, codecCtx_->pix_fmt,
+        codecCtx_->width, codecCtx_->height, srcFmt,
         outW_, outH_, AV_PIX_FMT_RGBA,
         SWS_BILINEAR, nullptr, nullptr, nullptr);
     if (!swsCtx_) { close(); return false; }
+
+    // Set input/output colour range so swscale doesn't guess (and warn).
+    int srcRange = fullRange ? 1 : 0; // 1 = full (0–255), 0 = limited (16–235)
+    int dstRange = 1;                 // RGBA output is always full range
+    sws_setColorspaceDetails(swsCtx_,
+        sws_getCoefficients(SWS_CS_DEFAULT), srcRange,
+        sws_getCoefficients(SWS_CS_DEFAULT), dstRange,
+        0, 1 << 16, 1 << 16);
 
     frame_     = av_frame_alloc();
     rgbaFrame_ = av_frame_alloc();
@@ -49,11 +70,22 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
 bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
     if (!fmtCtx_) return false;
 
-    // Read packets until we decode a video frame
-    while (true) {
+    // Static image: return cached pixels without re-decoding.
+    if (isStatic_ && hasCached_) {
+        outRGBA = pixelCache_;
+        return true;
+    }
+
+    // Loop guard: avoid spinning forever on broken/unseekable streams.
+    int attempts = 0;
+    constexpr int MAX_ATTEMPTS = 256;
+
+    while (attempts++ < MAX_ATTEMPTS) {
         int ret = av_read_frame(fmtCtx_, packet_);
         if (ret == AVERROR_EOF) {
-            // Loop: seek back to start
+            // Mark as static on first EOF — single-frame file.
+            if (hasCached_) { isStatic_ = true; outRGBA = pixelCache_; return true; }
+            // No frame decoded yet; try seeking back once.
             if (!seekToStart()) return false;
             continue;
         }
@@ -78,10 +110,17 @@ bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
         // Copy to output buffer
         std::size_t byteCount = outW_ * outH_ * 4;
         outRGBA.resize(byteCount);
-        // rgbaFrame_->data[0] is contiguous for RGBA8
         std::memcpy(outRGBA.data(), rgbaFrame_->data[0], byteCount);
+
+        // Cache for potential static re-use
+        pixelCache_ = outRGBA;
+        hasCached_  = true;
         return true;
     }
+
+    // Gave up — return cached frame if available
+    if (hasCached_) { outRGBA = pixelCache_; isStatic_ = true; return true; }
+    return false;
 }
 
 bool VideoDecoder::seekToStart() {
@@ -99,4 +138,7 @@ void VideoDecoder::close() {
     if (codecCtx_) { avcodec_free_context(&codecCtx_); }
     if (fmtCtx_)   { avformat_close_input(&fmtCtx_); }
     streamIdx_ = -1;
+    isStatic_  = false;
+    hasCached_ = false;
+    pixelCache_.clear();
 }

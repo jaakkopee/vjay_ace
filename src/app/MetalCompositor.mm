@@ -60,6 +60,7 @@ bool MetalCompositor::init() {
     psoWave_         = makePSO(@"wave_distort");
     psoEdgeInk_      = makePSO(@"edge_ink");
     psoComposite_    = makePSO(@"alpha_composite");
+    psoReadback_     = makePSO(@"readback_rgba8");
 
     // Allocate layer textures
     for (int i = 0; i < NUM_LAYERS; ++i)
@@ -80,11 +81,12 @@ bool MetalCompositor::init() {
 
 id<MTLTexture> MetalCompositor::makeTexture(int w, int h, bool /*halfRes*/) {
     MTLTextureDescriptor* desc =
-        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Float
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
                                                            width:w
                                                           height:h
                                                        mipmapped:NO];
-    desc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+    desc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite
+               | MTLTextureUsageRenderTarget;
     desc.storageMode = MTLStorageModePrivate;
     return [device_ newTextureWithDescriptor:desc];
 }
@@ -110,8 +112,8 @@ void MetalCompositor::uploadLayerPixels(int layerIdx,
     id<MTLTexture> tex = layerTex_[layerIdx];
     if (!tex) return;
 
-    // Upload RGBA8 into an upload texture, then blit or just replace.
-    // For simplicity in this sketch we create a shared staging texture per call.
+    // Create (or reuse) a shared staging texture in RGBA8Unorm — same format as
+    // layerTex_, so the blit below is always valid.
     MTLTextureDescriptor* desc =
         [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
                                                            width:width
@@ -120,19 +122,18 @@ void MetalCompositor::uploadLayerPixels(int layerIdx,
     desc.storageMode = MTLStorageModeShared;
     desc.usage = MTLTextureUsageShaderRead;
     id<MTLTexture> staging = [device_ newTextureWithDescriptor:desc];
-    [staging replaceRegion:MTLRegionMake2D(0,0,width,height)
+    [staging replaceRegion:MTLRegionMake2D(0, 0, width, height)
                mipmapLevel:0
                  withBytes:rgba
                bytesPerRow:width * 4];
 
-    // Blit staging → layerTex_ (converts RGBA8 → RGBA16Float on GPU)
     id<MTLCommandBuffer> cmd = [cmdQueue_ commandBuffer];
     id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
     [blit copyFromTexture:staging sourceSlice:0 sourceLevel:0
-              sourceOrigin:MTLOriginMake(0,0,0)
-                sourceSize:MTLSizeMake(width,height,1)
+              sourceOrigin:MTLOriginMake(0, 0, 0)
+                sourceSize:MTLSizeMake(width, height, 1)
                toTexture:tex destinationSlice:0 destinationLevel:0
-       destinationOrigin:MTLOriginMake(0,0,0)];
+       destinationOrigin:MTLOriginMake(0, 0, 0)];
     [blit endEncoding];
     [cmd commit];
 }
@@ -244,33 +245,48 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
 // ── final composite ────────────────────────────────────────────────────────────
 
 void MetalCompositor::runComposite(id<MTLCommandBuffer> cmd,
-                                    const std::array<id<MTLTexture>, 4>& groups) {
-    // Alpha-composite 4 group textures top-to-bottom using their opacities.
-    // Kernel 'alpha_composite' takes two textures and a float alpha, blends them.
-    // We chain: composite(group[0..3]) sequentially into outputTex_.
-    // (A production version would do this in one multi-texture kernel.)
-    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-    if (!psoComposite_) { [enc endEncoding]; return; }
+                                    const std::array<id<MTLTexture>, 3>& groups) {
+    if (!psoComposite_) return;
 
-    // groups[0] = processed layer 0+1, groups[1] = 2+3, groups[2] = 4+5, groups[3] = layer 6
-    // Odd-layer FX already modulated the src below; opacity is applied here.
-    // We simply alpha-over each group using layer opacity.
-    // For this sketch the kernel takes (bottom, overlay, alpha) → output.
-    for (int i = 0; i < 4; ++i) {
+    // Clear scratch_[0] to transparent black using a render pass (cheapest Metal clear).
+    {
+        MTLRenderPassDescriptor* rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+        rpd.colorAttachments[0].texture    = scratch_[0];
+        rpd.colorAttachments[0].loadAction  = MTLLoadActionClear;
+        rpd.colorAttachments[0].clearColor  = MTLClearColorMake(0, 0, 0, 0);
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+        [[cmd renderCommandEncoderWithDescriptor:rpd] endEncoding];
+    }
+
+    // Ping-pong: composite each group on top of the accumulator.
+    int cur = 0;
+    for (int i = 0; i < 3; ++i) {
         if (!groups[i]) continue;
+        int nxt = 1 - cur;
         ShaderParams p{};
         p.float_params[0] = opacity_[i * 2]; // source layer opacity
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
         [enc setComputePipelineState:psoComposite_];
-        [enc setTexture:(i == 0 ? outputTex_ : outputTex_) atIndex:0]; // bottom
-        [enc setTexture:groups[i] atIndex:1];                           // overlay
-        [enc setTexture:outputTex_ atIndex:2];                          // output
+        [enc setTexture:scratch_[cur] atIndex:0]; // bottom
+        [enc setTexture:groups[i]     atIndex:1]; // overlay
+        [enc setTexture:scratch_[nxt] atIndex:2]; // output
         [enc setBytes:&p length:sizeof(p) atIndex:0];
-        MTLSize threads     = {psoComposite_.threadExecutionWidth, 8, 1};
-        MTLSize threadGroups = {(WORK_W + threads.width - 1) / threads.width,
+        MTLSize threads      = {psoComposite_.threadExecutionWidth, 8, 1};
+        MTLSize threadGroups = {(WORK_W + threads.width  - 1) / threads.width,
                                 (WORK_H + threads.height - 1) / threads.height, 1};
         [enc dispatchThreadgroups:threadGroups threadsPerThreadgroup:threads];
+        [enc endEncoding];
+        cur = nxt;
     }
-    [enc endEncoding];
+
+    // Copy result into outputTex_ (same format — blit is fine here).
+    id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
+    [blit copyFromTexture:scratch_[cur] sourceSlice:0 sourceLevel:0
+             sourceOrigin:MTLOriginMake(0, 0, 0)
+               sourceSize:MTLSizeMake(WORK_W, WORK_H, 1)
+               toTexture:outputTex_ destinationSlice:0 destinationLevel:0
+      destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
 }
 
 // ── main composite entry ──────────────────────────────────────────────────────
@@ -291,27 +307,17 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
     }
 
     // Composite: group0 = (layer0 modulated by layer1), etc.
-    std::array<id<MTLTexture>, 4> groups = {
+    std::array<id<MTLTexture>, 3> groups = {
         layerTex_[1],  // FX-processed version of layer 0
         layerTex_[3],  // FX-processed version of layer 2
         layerTex_[5],  // FX-processed version of layer 4
-        layerTex_[6],  // top source
     };
     runComposite(cmd, groups);
 
-    // Readback output texture to CPU (RGBA8)
+    // Readback: outputTex_ is RGBA8Unorm — blit directly to the shared CPU buffer.
     id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
-    // Convert RGBA16Float → RGBA8 via a temporary RGBA8 texture then copy to buffer
-    MTLTextureDescriptor* desc =
-        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
-                                                           width:WORK_W height:WORK_H
-                                                       mipmapped:NO];
-    desc.storageMode = MTLStorageModeShared;
-    desc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
-    id<MTLTexture> rgba8 = [device_ newTextureWithDescriptor:desc];
-    [blit copyFromTexture:outputTex_ toTexture:rgba8];
-    [blit copyFromTexture:rgba8 sourceSlice:0 sourceLevel:0
-             sourceOrigin:MTLOriginMake(0,0,0)
+    [blit copyFromTexture:outputTex_ sourceSlice:0 sourceLevel:0
+             sourceOrigin:MTLOriginMake(0, 0, 0)
                sourceSize:MTLSizeMake(WORK_W, WORK_H, 1)
                  toBuffer:readbackBuf_ destinationOffset:0
        destinationBytesPerRow:WORK_W * 4

@@ -5,6 +5,7 @@
 #include "MetalCompositor.h"
 #include "ControlWindow.h"
 #include "PerformanceWindow.h"
+#include "MediaPickerWindow.h"
 #include <vector>
 #include <memory>
 
@@ -26,7 +27,13 @@ struct SceneState {
     static constexpr int NMODES = 3;
     std::array<std::array<float, NUM_KNOBS>, NMODES> knobs;
 
-    void reset() { for (auto& row : knobs) row.fill(-1.0f); }
+    // Per-scene image paths for src layers 0, 2, 4 (slots 0, 1, 2)
+    std::array<std::string, NUM_SRC_LAYERS> imgPaths;
+
+    void reset() {
+        for (auto& row : knobs) row.fill(-1.0f);
+        imgPaths.fill("");
+    }
 
     // True if at least one knob in the given mode has ever been set.
     bool hasData(int modeIdx) const {
@@ -53,6 +60,7 @@ private:
     MetalCompositor   compositor_;
     ControlWindow     controlWin_;
     PerformanceWindow perfWin_;
+    MediaPickerWindow mediaPickerWin_;
 
     // Per FX layer (slots 0=layer1, 1=layer3, 2=layer5)
     std::array<FxPatch, NUM_FX_LAYERS> fxPatches_;
@@ -84,6 +92,8 @@ private:
     void onSceneSelect(int sceneIdx);
     // Called by ControlWindow when user drags a knob
     void onKnobDrag(int knobIdx, float normValue);
+    // Called by MediaPickerWindow when an image is picked for a slot
+    void onImageSelected(int slotIdx, const std::string& path);
 
     // ── Engine helpers ────────────────────────────────────────────────────
     // Apply one knob value to the correct engine target (no pickup, no display).

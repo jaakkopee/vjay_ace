@@ -1973,6 +1973,7 @@ CMakeFiles/vjay_ace.dir/src/app/App.mm.o: \
   /opt/homebrew/opt/tgui/include/TGUI/Widgets/CanvasBase.hpp \
   /opt/homebrew/opt/tgui/include/TGUI/Backend/Font/SFML-Graphics/BackendFontSFML.hpp \
   /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PerformanceWindow.h \
+  /Users/jaakkop/Documents/koodii/vjay_ace/src/app/MediaPickerWindow.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AppKit.framework/Headers/AppKit.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AppKit.framework/Headers/AppKitDefines.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AppKit.framework/Headers/AppKitErrors.h \

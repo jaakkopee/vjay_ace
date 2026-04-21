@@ -27,6 +27,11 @@ bool PerformanceWindow::handleEvents() {
     return true;
 }
 
+void PerformanceWindow::clearBlack() {
+    window_.clear(sf::Color::Black);
+    window_.display();
+}
+
 void PerformanceWindow::present(const std::vector<uint8_t>& rgbaPixels) {
     if (!texReady_ || rgbaPixels.size() < static_cast<std::size_t>(WORK_W * WORK_H * 4))
         return;

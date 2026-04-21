@@ -81,8 +81,9 @@ private:
     id<MTLComputePipelineState> psoKaleidoscope_ = nil;
     id<MTLComputePipelineState> psoWave_         = nil;
     id<MTLComputePipelineState> psoEdgeInk_      = nil;
+    id<MTLComputePipelineState> psoReadback_     = nil;
 
-    std::array<float, NUM_LAYERS>          opacity_  = {1,1,1,1,1,1,1};
+    std::array<float, NUM_LAYERS>          opacity_  = {1,1,1,1,1,1};
     std::array<FxPatchId, NUM_FX_LAYERS>   patches_  = {};
     std::array<std::array<float,2>, NUM_FX_LAYERS> fxParams_ = {};
     float frameTime_ = 0.0f; // seconds since start, for animated FX
@@ -97,13 +98,11 @@ private:
                   id<MTLTexture> output,
                   const ShaderParams& params);
 
-    // Run the FX kernel for one FX layer.
-    void runFxPass(id<MTLCommandBuffer> cmd,
-                   int fxLayerIdx,        // 0, 1, or 2  (FX layers 1, 3, 5)
-                   id<MTLTexture> src,    // processed source below this FX layer
-                   id<MTLTexture> dst);   // output texture for this FX layer
+    // Run the FX kernel for one FX layer (slot 0–2).
+    void runFxPass(id<MTLCommandBuffer> cmd, int fxSlot,
+                   id<MTLTexture> src, id<MTLTexture> dst);
 
-    // Final alpha-composite all processed group outputs into outputTex_.
+    // Composite 3 processed group textures into outputTex_.
     void runComposite(id<MTLCommandBuffer> cmd,
-                      const std::array<id<MTLTexture>, 4>& groups);
+                      const std::array<id<MTLTexture>, 3>& groups);
 };

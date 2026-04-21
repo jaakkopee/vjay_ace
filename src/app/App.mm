@@ -53,6 +53,16 @@ bool App::init() {
     }
     perfWin_.open(perf.x, perf.y, perfS.x, perfS.y);
 
+    // ── Media picker window — small panel on primary screen ──────────────
+    // Position it below or beside the control window
+    const std::string stashRoot = []{
+        const char* home = getenv("HOME");
+        return home ? std::string(home) + "/Documents/koodii/vjay_ace/Heikki_stash" : "";
+    }();
+    // Open picker as a smaller overlay on the same screen
+    mediaPickerWin_.open(ctrl.x + ctrlS.x / 2, ctrl.y,
+                         ctrlS.x / 2, ctrlS.y / 2, stashRoot);
+
     // Pre-allocate composite texture (SFML side for preview)
     if (!compositeTex_.resize({WORK_W, WORK_H}))
         std::cerr << "[App] Cannot create composite SFML texture\n";
@@ -79,6 +89,7 @@ bool App::init() {
 
     // ── Default labels in control window ─────────────────────────────────
     controlWin_.setSceneName("None");
+    mediaPickerWin_.setSceneName("None");
     constexpr const char* defaultNames[] = {"FX-1 P1","FX-1 P2","FX-2 P1","FX-2 P2","FX-3 P1","FX-3 P2"};
     for (int i = 0; i < NUM_KNOBS; ++i)
         controlWin_.setKnobParamName(i, defaultNames[i]);
@@ -106,6 +117,9 @@ void App::wireCallbacks() {
         refreshKnobDisplay();
     };
     controlWin_.onKnobDrag = [this](int knob, float v){ onKnobDrag(knob, v); };
+    mediaPickerWin_.onFileSelected = [this](int slot, const std::string& path){
+        onImageSelected(slot, path);
+    };
 }
 
 // ── Engine helper: apply one knob value to the right engine target ────────────
@@ -209,6 +223,15 @@ void App::onSceneSelect(int sceneIdx) {
         layers_.setFxPatch(slot * 2 + 1, sc.fx[slot]);
     }
     controlWin_.setSceneName(sc.name);
+    mediaPickerWin_.setSceneName(sc.name);
+
+    // Load this scene's image files into the 3 source layers
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
+        const std::string& path = scenes_[sceneIdx].imgPaths[slot];
+        if (!path.empty())
+            layers_.loadMedia(slot * 2, path);
+    }
+    mediaPickerWin_.setSlotPaths(scenes_[sceneIdx].imgPaths);
 
     int fxMi = static_cast<int>(KnobMode::FxParam);
     SceneState& s = scenes_[sceneIdx];
@@ -242,6 +265,15 @@ void App::onKnobDrag(int knobIdx, float normValue) {
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
 
+// ── Image selected from media picker ──────────────────────────────────────────
+
+void App::onImageSelected(int slotIdx, const std::string& path) {
+    if (slotIdx < 0 || slotIdx >= NUM_SRC_LAYERS) return;
+    if (currentScene_ >= 0)
+        scenes_[currentScene_].imgPaths[slotIdx] = path;
+    layers_.loadMedia(slotIdx * 2, path);
+}
+
 // ── State persistence ─────────────────────────────────────────────────────────
 
 std::string App::statePath() {
@@ -254,14 +286,21 @@ void App::saveState() const {
     if (!f) { std::cerr << "[App] Could not save state\n"; return; }
     // Write magic + version for future-proofing
     const uint32_t magic = 0x56414345; // 'VACE'
-    const uint32_t ver   = 2;
+    const uint32_t ver   = 3;
     f.write(reinterpret_cast<const char*>(&magic), 4);
     f.write(reinterpret_cast<const char*>(&ver),   4);
-    // Write all 14 scene states
-    for (const auto& s : scenes_)
+    // Write all 14 scene states (knobs + image paths)
+    for (const auto& s : scenes_) {
         for (const auto& row : s.knobs)
             for (float v : row)
                 f.write(reinterpret_cast<const char*>(&v), sizeof(float));
+        // Write 3 image paths as length-prefixed strings
+        for (const auto& p : s.imgPaths) {
+            uint32_t len = static_cast<uint32_t>(p.size());
+            f.write(reinterpret_cast<const char*>(&len), sizeof(len));
+            if (len) f.write(p.data(), len);
+        }
+    }
     f.write(reinterpret_cast<const char*>(&currentScene_), sizeof(int));
     std::cout << "[App] State saved to " << statePath() << "\n";
 }
@@ -272,14 +311,23 @@ void App::loadState() {
     uint32_t magic = 0, ver = 0;
     if (!f.read(reinterpret_cast<char*>(&magic), 4)) return;
     if (!f.read(reinterpret_cast<char*>(&ver),   4)) return;
-    if (magic != 0x56414345 || ver != 2) {
+    if (magic != 0x56414345 || ver != 3) {
         std::cerr << "[App] Ignoring incompatible state file\n";
         return;
     }
-    for (auto& s : scenes_)
+    for (auto& s : scenes_) {
         for (auto& row : s.knobs)
             for (float& v : row)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
+        // Read 3 image paths
+        for (auto& p : s.imgPaths) {
+            uint32_t len = 0;
+            if (!f.read(reinterpret_cast<char*>(&len), sizeof(len))) return;
+            if (len > 4096) return; // sanity guard
+            p.resize(len);
+            if (len) { if (!f.read(p.data(), len)) return; }
+        }
+    }
     int savedScene = -1;
     if (f.read(reinterpret_cast<char*>(&savedScene), sizeof(int)))
         currentScene_ = savedScene;
@@ -293,6 +341,13 @@ void App::loadState() {
             layers_.setFxPatch(slot * 2 + 1, sc.fx[slot]);
         }
         controlWin_.setSceneName(sc.name);
+        mediaPickerWin_.setSceneName(sc.name);
+        // Load persisted images
+        for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
+            const std::string& path = scenes_[currentScene_].imgPaths[slot];
+            if (!path.empty()) layers_.loadMedia(slot * 2, path);
+        }
+        mediaPickerWin_.setSlotPaths(scenes_[currentScene_].imgPaths);
         applySceneToEngine(currentScene_);
     }
     std::cout << "[App] State restored from " << statePath() << "\n";
@@ -326,6 +381,8 @@ void App::processFrame() {
     if (compositor_.composite(compositePixels_)) {
         perfWin_.present(compositePixels_);
         compositeTex_.update(compositePixels_.data());
+    } else {
+        perfWin_.clearBlack();
     }
 }
 
@@ -335,9 +392,11 @@ void App::run() {
     while (controlWin_.isOpen() && perfWin_.isOpen()) {
         if (!controlWin_.handleEvents()) break;
         if (!perfWin_.handleEvents())    break;
+        if (mediaPickerWin_.isOpen()) mediaPickerWin_.handleEvents();
         controlWin_.update();
         processFrame();
         controlWin_.render(compositeTex_);
+        if (mediaPickerWin_.isOpen()) mediaPickerWin_.render();
     }
     saveState();
     controlWin_.close();

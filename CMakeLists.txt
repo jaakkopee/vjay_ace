@@ -82,6 +82,7 @@ add_executable(vjay_ace
     src/app/MetalCompositor.mm
     src/app/ControlWindow.cpp
     src/app/PerformanceWindow.cpp
+    src/app/MediaPickerWindow.mm
     src/app/FxPatch.cpp
 )
 

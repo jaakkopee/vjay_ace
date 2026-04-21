@@ -42,4 +42,8 @@ private:
 
     void close();
     bool seekToStart();
+
+    bool isStatic_  = false;          // true after first EOF — single-frame file
+    bool hasCached_ = false;          // true once pixelCache_ holds a valid frame
+    std::vector<uint8_t> pixelCache_; // decoded RGBA pixels for static images
 };

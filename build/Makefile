@@ -222,6 +222,14 @@ src/app/LayerManager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.s
 .PHONY : src/app/LayerManager.cpp.s
 
+src/app/MediaPickerWindow.o: src/app/MediaPickerWindow.mm.o
+.PHONY : src/app/MediaPickerWindow.o
+
+# target to build an object file
+src/app/MediaPickerWindow.mm.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o
+.PHONY : src/app/MediaPickerWindow.mm.o
+
 src/app/MetalCompositor.o: src/app/MetalCompositor.mm.o
 .PHONY : src/app/MetalCompositor.o
 
@@ -378,6 +386,7 @@ help:
 	@echo "... src/app/LayerManager.o"
 	@echo "... src/app/LayerManager.i"
 	@echo "... src/app/LayerManager.s"
+	@echo "... src/app/MediaPickerWindow.o"
 	@echo "... src/app/MetalCompositor.o"
 	@echo "... src/app/MidiRouter.o"
 	@echo "... src/app/MidiRouter.i"

@@ -7,6 +7,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.o"
   "CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.o.d"
+  "CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o"
+  "CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/MetalCompositor.mm.o"
   "CMakeFiles/vjay_ace.dir/src/app/MetalCompositor.mm.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/MidiRouter.cpp.o"

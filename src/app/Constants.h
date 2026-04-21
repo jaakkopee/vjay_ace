@@ -12,12 +12,12 @@ inline constexpr int HALF_W = 960;
 inline constexpr int HALF_H = 540;
 
 // ── Layer topology ──────────────────────────────────────────────────────────
-// 7 layers total (0–6):
-//   Even layers (0,2,4,6) = image/video sources
-//   Odd  layers (1,3,5)   = FX patches modulating the layer below
-inline constexpr int NUM_LAYERS = 7;
+// 6 layers total (0–5):
+//   Even layers (0,2,4) = image/video sources
+//   Odd  layers (1,3,5) = FX patches modulating the layer below
+inline constexpr int NUM_LAYERS = 6;
 inline constexpr int NUM_FX_LAYERS = 3;  // layers 1, 3, 5
-inline constexpr int NUM_SRC_LAYERS = 4; // layers 0, 2, 4, 6
+inline constexpr int NUM_SRC_LAYERS = 3; // layers 0, 2, 4
 
 inline bool isFxLayer(int idx)  { return idx % 2 == 1 && idx < NUM_LAYERS; }
 inline bool isSrcLayer(int idx) { return idx % 2 == 0 && idx < NUM_LAYERS; }

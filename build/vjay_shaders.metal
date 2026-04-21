@@ -243,7 +243,7 @@ kernel void edge_ink(
 }
 
 // ── alpha_composite ───────────────────────────────────────────────────────────
-// Blends overlay on top of bottom using float_params[0] as master opacity.
+// Porter-Duff "over" blend: overlay on top of bottom using master opacity.
 // Texture bindings: 0=bottom, 1=overlay, 2=output
 kernel void alpha_composite(
     texture2d<float, access::read>  bottom  [[texture(0)]],
@@ -256,6 +256,25 @@ kernel void alpha_composite(
     float4 b = bottom.read(gid);
     float4 o = overlay.read(gid);
     float alpha = params.float_params[0]; // master layer opacity
-    float4 result = b + o * alpha * o.a;
+    float eff   = alpha * o.a;            // effective alpha
+    float4 result = float4(mix(b.rgb, o.rgb, eff), b.a + eff * (1.0f - b.a));
     output.write(clamp(result, 0.0f, 1.0f), gid);
+}
+
+// ── readback_rgba8 ───────────────────────────────────────────────────────
+// Converts RGBA16Float texture to a packed RGBA8 CPU-readable byte buffer.
+// Avoids the Metal restriction that blit copies require matching pixel formats.
+kernel void readback_rgba8(
+    texture2d<float, access::read> input  [[texture(0)]],
+    device uchar*                  output [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+    float4 c  = clamp(input.read(gid), 0.0f, 1.0f);
+    uint   idx = (gid.y * w + gid.x) * 4;
+    output[idx+0] = uchar(c.r * 255.0f + 0.5f);
+    output[idx+1] = uchar(c.g * 255.0f + 0.5f);
+    output[idx+2] = uchar(c.b * 255.0f + 0.5f);
+    output[idx+3] = uchar(c.a * 255.0f + 0.5f);
 }

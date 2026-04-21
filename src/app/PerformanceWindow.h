@@ -23,6 +23,9 @@ public:
     // Upload composited RGBA8 pixel data (WORK_W × WORK_H) and blit to screen.
     void present(const std::vector<uint8_t>& rgbaPixels);
 
+    // Show a black frame (called when compositor has no output yet).
+    void clearBlack();
+
 private:
     sf::RenderWindow window_;
     sf::Texture      outputTex_;
