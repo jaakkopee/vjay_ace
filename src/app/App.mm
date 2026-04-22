@@ -455,6 +455,8 @@ void App::onSceneSelect(int sceneIdx) {
     refreshKnobDisplay();
     // 4. Update knob param name labels to reflect the new scene's FX patches.
     refreshKnobParamNames();
+    // Persist the new currentScene_ immediately so a crash won't revert it.
+    saveState();
 }
 
 // ── GUI knob drag ─────────────────────────────────────────────────────────────
@@ -495,8 +497,15 @@ void App::onKnobDrag(int knobIdx, float normValue) {
 
 void App::onImageSelected(int slotIdx, const std::string& path) {
     if (slotIdx < 0 || slotIdx >= NUM_SRC_LAYERS) return;
-    if (currentScene_ >= 0)
+    if (currentScene_ >= 0) {
         scenes_[currentScene_].imgPaths[slotIdx] = path;
+    } else {
+        // No scene active yet — store in every scene that has no image for this slot
+        // so the image persists regardless of which scene is selected first.
+        for (auto& s : scenes_)
+            if (s.imgPaths[slotIdx].empty())
+                s.imgPaths[slotIdx] = path;
+    }
     compositor_.beginCrossfade(slotIdx);  // capture current frame before new image uploads
     layers_.loadMedia(slotIdx * 2, path);
     saveState();  // persist immediately — don't rely on clean exit
@@ -510,27 +519,37 @@ std::string App::statePath() {
 }
 
 void App::saveState() const {
-    std::ofstream f(statePath(), std::ios::binary | std::ios::trunc);
-    if (!f) { std::cerr << "[App] Could not save state\n"; return; }
-    // Write magic + version for future-proofing
-    const uint32_t magic = 0x56414345; // 'VACE'
-    const uint32_t ver   = 7;
-    f.write(reinterpret_cast<const char*>(&magic), 4);
-    f.write(reinterpret_cast<const char*>(&ver),   4);
-    // Write all 14 scene states (knobs + image paths)
-    for (const auto& s : scenes_) {
-        for (const auto& row : s.knobs)
-            for (float v : row)
-                f.write(reinterpret_cast<const char*>(&v), sizeof(float));
-        // Write 3 image paths as length-prefixed strings
-        for (const auto& p : s.imgPaths) {
-            uint32_t len = static_cast<uint32_t>(p.size());
-            f.write(reinterpret_cast<const char*>(&len), sizeof(len));
-            if (len) f.write(p.data(), len);
+    // Write to a temp file first, then atomically rename so a crash mid-write
+    // can never leave the state file truncated/corrupt.
+    const std::string tmp = statePath() + ".tmp";
+    {
+        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        if (!f) { std::cerr << "[App] Could not open temp state file for writing\n"; return; }
+        // Write magic + version for future-proofing
+        const uint32_t magic = 0x56414345; // 'VACE'
+        const uint32_t ver   = 7;
+        f.write(reinterpret_cast<const char*>(&magic), 4);
+        f.write(reinterpret_cast<const char*>(&ver),   4);
+        // Write all 16 scene states (knobs + image paths)
+        for (const auto& s : scenes_) {
+            for (const auto& row : s.knobs)
+                for (float v : row)
+                    f.write(reinterpret_cast<const char*>(&v), sizeof(float));
+            // Write 3 image paths as length-prefixed strings
+            for (const auto& p : s.imgPaths) {
+                uint32_t len = static_cast<uint32_t>(p.size());
+                f.write(reinterpret_cast<const char*>(&len), sizeof(len));
+                if (len) f.write(p.data(), len);
+            }
         }
+        f.write(reinterpret_cast<const char*>(&currentScene_), sizeof(int));
+        if (!f) { std::cerr << "[App] State write error — temp file may be incomplete\n"; return; }
+    } // ofstream closes + flushes here
+    if (std::rename(tmp.c_str(), statePath().c_str()) != 0) {
+        std::cerr << "[App] Could not rename temp state file to " << statePath() << "\n";
+        return;
     }
-    f.write(reinterpret_cast<const char*>(&currentScene_), sizeof(int));
-    std::cout << "[App] State saved to " << statePath() << "\n";
+    std::cout << "[App] State saved (scene=" << currentScene_ << ")\n";
 }
 
 void App::loadState() {
@@ -575,8 +594,12 @@ void App::loadState() {
         }
     }
     int savedScene = -1;
-    if (f.read(reinterpret_cast<char*>(&savedScene), sizeof(int)))
-        currentScene_ = savedScene;
+    if (f.read(reinterpret_cast<char*>(&savedScene), sizeof(int))) {
+        if (savedScene >= 0 && savedScene < NUM_SCENES)
+            currentScene_ = savedScene;
+        else
+            std::cerr << "[App] Ignoring out-of-range savedScene=" << savedScene << "\n";
+    }
 
     // Apply the last-active scene to the engine
     if (currentScene_ >= 0) {
