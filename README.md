@@ -185,7 +185,7 @@ Full stateful agent simulation (ping-pong buffer) planned.
 - **P2:** Decay rate
 
 ### LIF Network
-Leaky Integrate-and-Fire neuron network applied to image data. Each pixel is treated as a LIF neuron receiving synaptic input from its neighbourhood. The topology parameter smoothly transitions from local excitatory coupling (radius 1 grid — small clusters light up) to an inhibitory-centre / excitatory-surround (Mexican-hat) long-range topology that creates edge-highlighted activation patterns. Audio RMS lowers the firing threshold, making beats trigger broader neuron cascades.  
+Leaky Integrate-and-Fire neuron network applied to image data. Each pixel is treated as a LIF neuron receiving synaptic input from its neighborhood. The topology parameter smoothly transitions from local excitatory coupling (radius 1 grid — small clusters light up) to an inhibitory-centre / excitatory-surround (Mexican-hat) long-range topology that creates edge-highlighted activation patterns. Audio RMS lowers the firing threshold, making beats trigger broader neuron cascades.  
 - **P1:** Firing threshold (0–1; lower = more neurons fire)  
 - **P2:** Topology (0 = local excitatory, 1 = inhibitory-surround long-range)
 
