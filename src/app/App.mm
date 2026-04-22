@@ -146,7 +146,7 @@ void App::wireCallbacks() {
         static const char* rotNames[]  = {"Rot L0",  "-", "Rot L1",  "-", "Rot L2",  "-"};
         static const char* zoomNames[] = {"Zoom L0", "-", "Zoom L1", "-", "Zoom L2", "-"};
         static const char* opNames[]   = {"Opac L0", "-", "Opac L1", "-", "Opac L2", "-"};
-        static const char* gainNames[] = {"Gain 1", "Gain 2", "Gain 3", "Gain 4", "Gain 5", "Gain 6"};
+        static const char* gainNames[] = {"Gain 0", "-", "Gain 1", "-", "Gain 2", "-"};
         static const char* panNames[]  = {"Pan0 X",  "Pan0 Y", "Pan1 X",  "Pan1 Y", "Pan2 X",  "Pan2 Y"};
         KnobMode eff = effectiveMode();
         controlWin_.setKnobMode(eff);
@@ -217,8 +217,8 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
             }
             break;
         case KnobMode::FxAudio:
-            if (knobIdx < NUM_FX_LAYERS)
-                compositor_.setAudioGain(knobIdx, v * 2.0f);  // 0.0–2.0x gain on FX layers 1,3,5
+            if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_FX_LAYERS)
+                compositor_.setAudioGain(knobIdx / 2, v * 2.0f);  // 0.0–2.0x gain
             break;
         case KnobMode::FxParam: {
             int slot = knobIdx / 2, param = knobIdx % 2;
@@ -285,9 +285,10 @@ void App::refreshKnobDisplay() {
     const SceneState& s = scenes_[currentScene_];
     // For rotate/zoom/opacity: knobs 0,2,4 active; knobs 1,3,5 inactive.
     // For pan: all 6 active. For others: all 6 active.
-    const bool evenOnlyMode = (eff == KnobMode::ImgRotate ||
-                               eff == KnobMode::ImgZoom   ||
-                               eff == KnobMode::LayerLevel);
+    const bool evenOnlyMode = (eff == KnobMode::ImgRotate  ||
+                               eff == KnobMode::ImgZoom    ||
+                               eff == KnobMode::LayerLevel ||
+                               eff == KnobMode::FxAudio);
     for (int k = 0; k < NUM_KNOBS; ++k) {
         // Odd knobs are inactive in single-param-per-layer modes.
         if (evenOnlyMode && k % 2 == 1) {
