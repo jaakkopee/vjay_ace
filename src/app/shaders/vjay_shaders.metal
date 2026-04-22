@@ -694,6 +694,33 @@ kernel void zoom_source(
     output.write(input.sample(s, uv), gid);
 }
 
+// ── pan_source ────────────────────────────────────────────────────────────────
+// Translates (pans) a source texture by a fractional pixel offset.
+// float_params[0] = panX  (-1.0 = full left,  0.0 = centre, +1.0 = full right)
+// float_params[1] = panY  (-1.0 = full up,    0.0 = centre, +1.0 = full down)
+// Pixels that shift outside the frame become transparent black.
+kernel void pan_source(
+    texture2d<float, access::sample> input  [[texture(0)]],
+    texture2d<float, access::write>  output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    // Inverse map: which source pixel maps to this output pixel?
+    float srcX = float(gid.x) - params.float_params[0] * float(w);
+    float srcY = float(gid.y) - params.float_params[1] * float(h);
+
+    if (srcX < 0.0f || srcX >= float(w) || srcY < 0.0f || srcY >= float(h)) {
+        output.write(float4(0.0f), gid);
+        return;
+    }
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
+    output.write(input.sample(s, float2(srcX / float(w), srcY / float(h))), gid);
+}
+
 // ── lif_network ───────────────────────────────────────────────────────────────
 // Leaky Integrate-and-Fire (LIF) neuron network modulating image data.
 // Each pixel acts as a LIF neuron driven by local image luminance.

@@ -51,6 +51,11 @@ public:
     // Set zoom factor for a source layer slot (1.0 = no zoom; >1 = zoom in; <1 = zoom out).
     void setLayerZoom(int srcSlot, float factor);
 
+    // Set pan offset for a source layer slot.
+    // offset is a fraction of the frame: -1.0 = full left/up, +1.0 = full right/down, 0.0 = centre.
+    void setLayerPanX(int srcSlot, float offset);
+    void setLayerPanY(int srcSlot, float offset);
+
     // Set audio band magnitudes (0.0-1.0 each).  Call each frame from the main thread.
     // Bands are packed into float_params[8..15] of every FX ShaderParams dispatch.
     void setAudioBands(const float* bands, int count, float rms);
@@ -114,6 +119,13 @@ private:
     // Per-source-slot zoom textures and factors (1.0 = no change)
     id<MTLTexture>              zoomTex_[NUM_SRC_LAYERS]   = {nil, nil, nil};
     float                       zooms_[NUM_SRC_LAYERS]     = {1.0f, 1.0f, 1.0f};
+
+    // Per-source-slot pan textures and offsets (0.0 = no pan, fraction of frame)
+    id<MTLTexture>              panTex_[NUM_SRC_LAYERS]    = {nil, nil, nil};
+    float                       panX_[NUM_SRC_LAYERS]      = {0.0f, 0.0f, 0.0f};
+    float                       panY_[NUM_SRC_LAYERS]      = {0.0f, 0.0f, 0.0f};
+
+    id<MTLComputePipelineState> psoPan_ = nil;
 
     std::array<float, NUM_LAYERS>          opacity_  = {1,1,1,1,1,1};
     std::array<FxPatchId, NUM_FX_LAYERS>   patches_  = {};

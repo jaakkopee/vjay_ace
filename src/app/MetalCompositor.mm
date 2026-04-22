@@ -72,6 +72,7 @@ bool MetalCompositor::init() {
     psoCAGlow_       = makePSO(@"ca_glow");
     psoBitplane_     = makePSO(@"bitplane_reactor");
     psoLIFNetwork_   = makePSO(@"lif_network");
+    psoPan_          = makePSO(@"pan_source");
 
     // Allocate layer textures
     for (int i = 0; i < NUM_LAYERS; ++i)
@@ -85,6 +86,7 @@ bool MetalCompositor::init() {
     for (int s = 0; s < NUM_SRC_LAYERS; ++s) {
         rotateTex_[s] = makeTexture(WORK_W, WORK_H);
         zoomTex_[s]   = makeTexture(WORK_W, WORK_H);
+        panTex_[s]    = makeTexture(WORK_W, WORK_H);
     }
 
     // CPU-readable buffer for readback (RGBA8, 4 bytes/pixel)
@@ -181,6 +183,16 @@ void MetalCompositor::setLayerRotation(int srcSlot, float radians) {
 void MetalCompositor::setLayerZoom(int srcSlot, float factor) {
     assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
     zooms_[srcSlot] = (factor > 0.001f) ? factor : 0.001f;
+}
+
+void MetalCompositor::setLayerPanX(int srcSlot, float offset) {
+    assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
+    panX_[srcSlot] = offset;
+}
+
+void MetalCompositor::setLayerPanY(int srcSlot, float offset) {
+    assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
+    panY_[srcSlot] = offset;
 }
 
 void MetalCompositor::setAudioBands(const float* bands, int count, float rms) {
@@ -425,8 +437,17 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
             dispatch(enc, psoZoom_, rotateTex_[slot], zoomTex_[slot], zp);
             [enc endEncoding];
         }
-        // 3. FX pass on fully-transformed source → layerTex_[li] (always full FX)
-        runFxPass(cmd, slot, zoomTex_[slot], layerTex_[li]);
+        // 3. Pan pre-pass (zoom output → pan output)
+        {
+            ShaderParams pp{};
+            pp.float_params[0] = panX_[slot];
+            pp.float_params[1] = panY_[slot];
+            id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+            dispatch(enc, psoPan_, zoomTex_[slot], panTex_[slot], pp);
+            [enc endEncoding];
+        }
+        // 4. FX pass on fully-transformed source → layerTex_[li] (always full FX)
+        runFxPass(cmd, slot, panTex_[slot], layerTex_[li]);
         // Opacity is applied in the final composite via opacity_[li], not here.
     }
 

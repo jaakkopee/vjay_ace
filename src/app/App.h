@@ -24,7 +24,7 @@ struct FxPatch {
 // knobs[modeIdx][knobIdx] = -1.0f means "not yet set" → first physical touch
 // applies directly without any pickup blocking.
 struct SceneState {
-    static constexpr int NMODES = 5;  // LayerLevel, FxAudio, FxParam, ImgRotate, ImgZoom
+    static constexpr int NMODES = 6;  // LayerLevel, FxAudio, FxParam, ImgRotate, ImgZoom, ImgPan
     std::array<std::array<float, NUM_KNOBS>, NMODES> knobs;
 
     // Per-scene image paths for src layers 0, 2, 4 (slots 0, 1, 2)
@@ -73,6 +73,7 @@ private:
     bool     zKeyHeld_  = false;  // Z held → ImgZoom overrides knobMode_
     bool     oKeyHeld_  = false;  // O held → LayerLevel mode
     bool     gKeyHeld_  = false;  // G held → FxAudio mode
+    bool     pKeyHeld_  = false;  // P held → ImgPan mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
     // Returns the effective mode considering modifier keys.
@@ -81,6 +82,7 @@ private:
         if (zKeyHeld_) return KnobMode::ImgZoom;
         if (oKeyHeld_) return KnobMode::LayerLevel;
         if (gKeyHeld_) return KnobMode::FxAudio;
+        if (pKeyHeld_) return KnobMode::ImgPan;
         return knobMode_;
     }
 

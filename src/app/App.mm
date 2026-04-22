@@ -123,7 +123,7 @@ void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
     midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
     midi_.onModeChange = [this](KnobMode m){
-        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_) return;  // modifier key overrides; ignore while held
+        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
         controlWin_.setKnobMode(m);
         static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
@@ -143,10 +143,11 @@ void App::wireCallbacks() {
 
     // ── Shared helper: update display after a modifier key press/release ──
     auto refreshModifierDisplay = [this]() {
-        static const char* rotNames[]  = {"Rot L0", "Rot L2", "Rot L4", "-", "-", "-"};
-        static const char* zoomNames[] = {"Zoom L0","Zoom L2","Zoom L4","-","-","-"};
-        static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
+        static const char* rotNames[]  = {"Rot L0",  "-", "Rot L1",  "-", "Rot L2",  "-"};
+        static const char* zoomNames[] = {"Zoom L0", "-", "Zoom L1", "-", "Zoom L2", "-"};
+        static const char* opNames[]   = {"Opac L0", "-", "Opac L1", "-", "Opac L2", "-"};
         static const char* gainNames[] = {"Gain 1", "Gain 2", "Gain 3", "Gain 4", "Gain 5", "Gain 6"};
+        static const char* panNames[]  = {"Pan0 X",  "Pan0 Y", "Pan1 X",  "Pan1 Y", "Pan2 X",  "Pan2 Y"};
         KnobMode eff = effectiveMode();
         controlWin_.setKnobMode(eff);
         if (eff == KnobMode::ImgRotate) {
@@ -157,6 +158,8 @@ void App::wireCallbacks() {
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, opNames[i]);
         } else if (eff == KnobMode::FxAudio) {
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gainNames[i]);
+        } else if (eff == KnobMode::ImgPan) {
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, panNames[i]);
         } else {
             refreshKnobParamNames();
         }
@@ -183,6 +186,11 @@ void App::wireCallbacks() {
         gKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
+    controlWin_.onPKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == pKeyHeld_) return;
+        pKeyHeld_ = pressed;
+        refreshModifierDisplay();
+    };
     controlWin_.onBKey = [this](bool bypassed) {
         audioBypassed_ = bypassed;
         // Zero out bands in compositor immediately when bypass toggles on
@@ -201,10 +209,11 @@ void App::wireCallbacks() {
 void App::applyKnob(int knobIdx, float v, KnobMode mode) {
     switch (mode) {
         case KnobMode::LayerLevel:
-            if (knobIdx < NUM_FX_LAYERS) {
-                int fxLayer = knobIdx * 2 + 1;  // knob 0→layer1, 1→layer3, 2→layer5
-                layers_.setOpacity(fxLayer, v);          // stored so syncCompositorState reads it
-                compositor_.setLayerOpacity(fxLayer, v); // immediate effect
+            if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_FX_LAYERS) {
+                int slot    = knobIdx / 2;     // 0→1, 2→3, 4→5
+                int fxLayer = slot * 2 + 1;
+                layers_.setOpacity(fxLayer, v);
+                compositor_.setLayerOpacity(fxLayer, v);
             }
             break;
         case KnobMode::FxAudio:
@@ -220,14 +229,23 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
             break;
         }
         case KnobMode::ImgRotate:
-            if (knobIdx < NUM_SRC_LAYERS)
-                compositor_.setLayerRotation(knobIdx, v * 2.0f * 3.14159265f);
+            if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS)
+                compositor_.setLayerRotation(knobIdx / 2, v * 2.0f * 3.14159265f);
             break;
         case KnobMode::ImgZoom:
-            if (knobIdx < NUM_SRC_LAYERS)
-                // knob 0.5 = 1.0x (no zoom); exponential: 4^(v-0.5) → [0.5x .. 2.0x]
-                compositor_.setLayerZoom(knobIdx, std::pow(4.0f, v - 0.5f));
+            if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS)
+                compositor_.setLayerZoom(knobIdx / 2, std::pow(4.0f, v - 0.5f));
             break;
+        case KnobMode::ImgPan: {
+            int slot = knobIdx / 2;  // knob pair: 0/1→slot0, 2/3→slot1, 4/5→slot2
+            bool isY = (knobIdx % 2 == 1);
+            if (slot < NUM_SRC_LAYERS) {
+                float offset = (v - 0.5f) * 2.0f;  // −1.0 (left/up) .. +1.0 (right/down)
+                if (isY) compositor_.setLayerPanY(slot, offset);
+                else     compositor_.setLayerPanX(slot, offset);
+            }
+            break;
+        }
     }
 }
 
@@ -265,16 +283,20 @@ void App::refreshKnobDisplay() {
     KnobMode eff = effectiveMode();
     int mi = static_cast<int>(eff);
     const SceneState& s = scenes_[currentScene_];
-    const bool modifierMode = (eff == KnobMode::ImgRotate || eff == KnobMode::ImgZoom);
+    // For rotate/zoom/opacity: knobs 0,2,4 active; knobs 1,3,5 inactive.
+    // For pan: all 6 active. For others: all 6 active.
+    const bool evenOnlyMode = (eff == KnobMode::ImgRotate ||
+                               eff == KnobMode::ImgZoom   ||
+                               eff == KnobMode::LayerLevel);
     for (int k = 0; k < NUM_KNOBS; ++k) {
-        // In rotate/zoom mode, only knobs 0-2 are active; show 0 for the rest.
-        if (modifierMode && k >= NUM_SRC_LAYERS) {
+        // Odd knobs are inactive in single-param-per-layer modes.
+        if (evenOnlyMode && k % 2 == 1) {
             controlWin_.setKnobValue(k, 0);
             continue;
         }
         float v = s.knobs[mi][k];
         // If this knob hasn't been set in this scene yet, show physical position.
-        float display = (v >= 0.0f) ? v : (modifierMode ? 0.0f : knobLastPhys_[k]);
+        float display = (v >= 0.0f) ? v : (evenOnlyMode ? 0.0f : knobLastPhys_[k]);
         controlWin_.setKnobValue(k, static_cast<int>(display * 127.0f));
     }
 }
@@ -291,7 +313,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     // If a modifier key is held, override to its mode
     KnobMode effectiveMod = effectiveMode();
     // Only use MIDI-provided mode when no key is held
-    KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_) ? effectiveMod : mode;
+        KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_) ? effectiveMod : mode;
     int    mi   = static_cast<int>(eff);
     float& soft = scenes_[currentScene_].knobs[mi][knobIdx];
 
@@ -396,7 +418,7 @@ void App::saveState() const {
     if (!f) { std::cerr << "[App] Could not save state\n"; return; }
     // Write magic + version for future-proofing
     const uint32_t magic = 0x56414345; // 'VACE'
-    const uint32_t ver   = 6;
+    const uint32_t ver   = 7;
     f.write(reinterpret_cast<const char*>(&magic), 4);
     f.write(reinterpret_cast<const char*>(&ver),   4);
     // Write all 14 scene states (knobs + image paths)
@@ -427,19 +449,22 @@ void App::loadState() {
     }
     // v3: 3 modes, v4: 4 modes (added ImgRotate), v5: 5 modes (added ImgZoom)
     // v6: 16 scenes (added 2 LIF scenes; O/G keys replace C2/C#2 mode-latch)
+    // v7: 6 modes (added ImgPan)
     const bool isV3 = (ver == 3);
     const bool isV4 = (ver == 4);
     const bool isV5 = (ver == 5);
     const bool isV6 = (ver == 6);
-    if (!isV3 && !isV4 && !isV5 && !isV6) {
+    const bool isV7 = (ver == 7);
+    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7) {
         std::cerr << "[App] Ignoring incompatible state file\n";
         return;
     }
-    // Older saves have 14 scenes; v6 has 16. Read only what was saved.
-    const int savedSceneCount = (isV6) ? NUM_SCENES : 14;
+    // Older saves have 14 scenes; v6+ has 16. Read only what was saved.
+    const int savedSceneCount = (isV6 || isV7) ? NUM_SCENES : 14;
     for (int si = 0; si < savedSceneCount && si < NUM_SCENES; ++si) {
         auto& s = scenes_[si];
-        int savedModes = isV3 ? 3 : isV4 ? 4 : SceneState::NMODES;
+        // v3=3 modes, v4=4, v5/v6=5, v7=6
+        int savedModes = isV3 ? 3 : isV4 ? 4 : (isV5 || isV6) ? 5 : SceneState::NMODES;
         for (int mi = 0; mi < savedModes; ++mi)
             for (float& v : s.knobs[mi])
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;

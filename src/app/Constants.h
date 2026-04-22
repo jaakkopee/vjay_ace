@@ -157,6 +157,7 @@ enum class KnobMode {
     FxParam,      // default: knobs control active FX patch params 1 & 2 per FX layer
     ImgRotate,    // R key held: knobs 0-2 → rotation (0–2π) for layers 0, 2, 4
     ImgZoom,      // Z key held: knobs 0-2 → zoom factor for layers 0, 2, 4
+    ImgPan,       // P key held: knobs 0/1,2/3,4/5 → H/V pan for src layers 0,2,4
 };
 
 // ── Per-layer state (plain data, owned by LayerManager) ────────────────────
