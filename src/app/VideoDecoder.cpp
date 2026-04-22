@@ -40,15 +40,33 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
         default: break;
     }
 
+    // Aspect-ratio-preserving fit into outW_ x outH_ (letterbox / pillarbox)
+    {
+        float srcAR = float(codecCtx_->width) / float(codecCtx_->height);
+        float dstAR = float(outW_) / float(outH_);
+        if (srcAR > dstAR) { // wider than output → pillarbox
+            fitW_ = outW_;
+            fitH_ = int(outW_ / srcAR + 0.5f);
+        } else {             // taller than output → letterbox
+            fitH_ = outH_;
+            fitW_ = int(outH_ * srcAR + 0.5f);
+        }
+        // Keep dimensions even (some codecs require it)
+        fitW_ = fitW_ & ~1;
+        fitH_ = fitH_ & ~1;
+        offX_ = (outW_ - fitW_) / 2;
+        offY_ = (outH_ - fitH_) / 2;
+    }
+
     swsCtx_ = sws_getContext(
         codecCtx_->width, codecCtx_->height, srcFmt,
-        outW_, outH_, AV_PIX_FMT_RGBA,
+        fitW_, fitH_, AV_PIX_FMT_RGBA,
         SWS_BILINEAR, nullptr, nullptr, nullptr);
     if (!swsCtx_) { close(); return false; }
 
     // Set input/output colour range so swscale doesn't guess (and warn).
-    int srcRange = fullRange ? 1 : 0; // 1 = full (0–255), 0 = limited (16–235)
-    int dstRange = 1;                 // RGBA output is always full range
+    int srcRange = fullRange ? 1 : 0;
+    int dstRange = 1;
     sws_setColorspaceDetails(swsCtx_,
         sws_getCoefficients(SWS_CS_DEFAULT), srcRange,
         sws_getCoefficients(SWS_CS_DEFAULT), dstRange,
@@ -59,10 +77,10 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
     packet_    = av_packet_alloc();
 
     rgbaFrame_->format = AV_PIX_FMT_RGBA;
-    rgbaFrame_->width  = outW_;
-    rgbaFrame_->height = outH_;
+    rgbaFrame_->width  = fitW_;
+    rgbaFrame_->height = fitH_;
     av_image_alloc(rgbaFrame_->data, rgbaFrame_->linesize,
-                   outW_, outH_, AV_PIX_FMT_RGBA, 32);
+                   fitW_, fitH_, AV_PIX_FMT_RGBA, 32);
 
     return true;
 }
@@ -101,16 +119,22 @@ bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
         if (ret == AVERROR(EAGAIN)) continue;
         if (ret < 0) return false;
 
-        // Scale to RGBA
+        // Scale to fitted RGBA dimensions
         sws_scale(swsCtx_,
                   frame_->data, frame_->linesize, 0, codecCtx_->height,
                   rgbaFrame_->data, rgbaFrame_->linesize);
         av_frame_unref(frame_);
 
-        // Copy to output buffer
+        // Blit fitted image centred into a zero-padded outW_*outH_ buffer
         std::size_t byteCount = outW_ * outH_ * 4;
-        outRGBA.resize(byteCount);
-        std::memcpy(outRGBA.data(), rgbaFrame_->data[0], byteCount);
+        outRGBA.assign(byteCount, 0);  // black padding
+        const uint8_t* src = rgbaFrame_->data[0];
+        int srcStride = rgbaFrame_->linesize[0];
+        for (int row = 0; row < fitH_; ++row) {
+            int dstRow = offY_ + row;
+            uint8_t* dst = outRGBA.data() + (dstRow * outW_ + offX_) * 4;
+            std::memcpy(dst, src + row * srcStride, fitW_ * 4);
+        }
 
         // Cache for potential static re-use
         pixelCache_ = outRGBA;

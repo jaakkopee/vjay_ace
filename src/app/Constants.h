@@ -35,7 +35,7 @@ inline int ccToKnobIndex(int cc) {
 }
 
 // Special note mappings (channel 1, note numbers)
-inline constexpr int NOTE_LAYER_OPACITY_MODE  = 36; // C2  held → 6 knobs = layer opacities
+inline constexpr int NOTE_LAYER_OPACITY_MODE  = 36; // C2  held → 3 knobs = FX layer opacities
 inline constexpr int NOTE_FX_AUDIO_MODE       = 37; // C#2 held → 6 knobs = audio gain
 
 // FX patch select notes start at D2 = 38
@@ -152,7 +152,7 @@ inline const char* fxParamName(FxPatchId id, int paramIdx) {
 
 // ── KnobMode ────────────────────────────────────────────────────────────────
 enum class KnobMode {
-    LayerLevel,   // C2  held: knobs 0-5 → layer opacities (layers 1-6)
+    LayerLevel,   // C2  held: knobs 0-2 → FX layer opacities (layers 1, 3, 5)
     FxAudio,      // C#2 held: knobs 0-5 → per-FX audio gain
     FxParam,      // default: knobs control active FX patch params 1 & 2 per FX layer
     ImgRotate,    // R key held: knobs 0-2 → rotation (0–2π) for layers 0, 2, 4

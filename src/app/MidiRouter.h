@@ -14,7 +14,7 @@
 //   CC_LAYER_KNOB_BASE + 0..5 → knob 0..5
 //
 // Special note-on messages (latch while held):
-//   NOTE_LAYER_OPACITY_MODE (C2=36)  → KnobMode::LayerLevel
+//   NOTE_LAYER_OPACITY_MODE (C2=36)  → KnobMode::LayerLevel  (knobs 0-2 = FX layer opacity)
 //   NOTE_FX_AUDIO_MODE      (C#2=37) → KnobMode::FxAudio
 //   (all other note-ons)             → KnobMode::FxParam + dispatch FX patch select
 

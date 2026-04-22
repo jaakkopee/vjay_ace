@@ -178,8 +178,10 @@ void App::wireCallbacks() {
 void App::applyKnob(int knobIdx, float v, KnobMode mode) {
     switch (mode) {
         case KnobMode::LayerLevel:
-            if (knobIdx < NUM_LAYERS)
-                layers_.setOpacity(knobIdx, v);  // knob N → layer N (0-5)
+            if (knobIdx < NUM_FX_LAYERS) {
+                int fxLayer = knobIdx * 2 + 1;  // knob 0→layer1, 1→layer3, 2→layer5
+                compositor_.setLayerOpacity(fxLayer, v);
+            }
             break;
         case KnobMode::FxAudio:
             if (knobIdx < NUM_FX_LAYERS)

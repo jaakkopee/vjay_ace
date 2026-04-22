@@ -39,6 +39,11 @@ private:
     int              streamIdx_= -1;
     int              outW_     = 0;
     int              outH_     = 0;
+    // Aspect-ratio-fitted region within the output frame
+    int              fitW_     = 0;
+    int              fitH_     = 0;
+    int              offX_     = 0;  // left edge of centred image
+    int              offY_     = 0;  // top  edge of centred image
 
     void close();
     bool seekToStart();
