@@ -24,9 +24,9 @@
 //  0.00    0.00    0.00              |
 //
 // CCs: 3, 9, 12, 13, 14, 15
-// C2 held  → knobs = layer opacities
-// C#2 held → knobs = audio gain
-// Default  → knobs = active FX patch params
+// O held → knobs = layer opacities (LayerLevel mode)
+// G held → knobs = audio gain      (FxAudio mode)
+// Default → knobs = active FX patch params
 
 class ControlWindow {
 public:
@@ -61,6 +61,12 @@ public:
 
     // Fired when the Z key is pressed (true) or released (false)
     std::function<void(bool pressed)> onZKey;
+
+    // Fired when the O key is pressed (true) or released (false) → LayerLevel mode
+    std::function<void(bool pressed)> onOKey;
+
+    // Fired when the G key is pressed (true) or released (false) → FxAudio mode
+    std::function<void(bool pressed)> onGKey;
 
     // Fired when the B key is toggled (true = bypassed, false = active)
     std::function<void(bool bypassed)> onBKey;
@@ -97,6 +103,8 @@ private:
     // Key polling state (previous frame)
     bool rKeyWas_ = false;
     bool zKeyWas_ = false;
+    bool oKeyWas_ = false;
+    bool gKeyWas_ = false;
     bool bKeyWas_ = false;
     bool audioBypassed_ = false;
 

@@ -71,12 +71,16 @@ private:
     KnobMode knobMode_  = KnobMode::FxParam;
     bool     rKeyHeld_  = false;  // R held → ImgRotate overrides knobMode_
     bool     zKeyHeld_  = false;  // Z held → ImgZoom overrides knobMode_
+    bool     oKeyHeld_  = false;  // O held → LayerLevel mode
+    bool     gKeyHeld_  = false;  // G held → FxAudio mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
     // Returns the effective mode considering modifier keys.
     KnobMode effectiveMode() const {
         if (rKeyHeld_) return KnobMode::ImgRotate;
         if (zKeyHeld_) return KnobMode::ImgZoom;
+        if (oKeyHeld_) return KnobMode::LayerLevel;
+        if (gKeyHeld_) return KnobMode::FxAudio;
         return knobMode_;
     }
 

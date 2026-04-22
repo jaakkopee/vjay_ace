@@ -123,7 +123,7 @@ void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
     midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
     midi_.onModeChange = [this](KnobMode m){
-        if (rKeyHeld_ || zKeyHeld_) return;  // modifier key overrides; ignore while held
+        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
         controlWin_.setKnobMode(m);
         static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
@@ -171,6 +171,16 @@ void App::wireCallbacks() {
     controlWin_.onZKey = [this, refreshModifierDisplay](bool pressed) {
         if (pressed == zKeyHeld_) return;
         zKeyHeld_ = pressed;
+        refreshModifierDisplay();
+    };
+    controlWin_.onOKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == oKeyHeld_) return;
+        oKeyHeld_ = pressed;
+        refreshModifierDisplay();
+    };
+    controlWin_.onGKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == gKeyHeld_) return;
+        gKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
     controlWin_.onBKey = [this](bool bypassed) {
@@ -281,7 +291,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     // If a modifier key is held, override to its mode
     KnobMode effectiveMod = effectiveMode();
     // Only use MIDI-provided mode when no key is held
-    KnobMode eff = (rKeyHeld_ || zKeyHeld_) ? effectiveMod : mode;
+    KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_) ? effectiveMod : mode;
     int    mi   = static_cast<int>(eff);
     float& soft = scenes_[currentScene_].knobs[mi][knobIdx];
 
@@ -386,7 +396,7 @@ void App::saveState() const {
     if (!f) { std::cerr << "[App] Could not save state\n"; return; }
     // Write magic + version for future-proofing
     const uint32_t magic = 0x56414345; // 'VACE'
-    const uint32_t ver   = 5;
+    const uint32_t ver   = 6;
     f.write(reinterpret_cast<const char*>(&magic), 4);
     f.write(reinterpret_cast<const char*>(&ver),   4);
     // Write all 14 scene states (knobs + image paths)
@@ -416,14 +426,19 @@ void App::loadState() {
         return;
     }
     // v3: 3 modes, v4: 4 modes (added ImgRotate), v5: 5 modes (added ImgZoom)
+    // v6: 16 scenes (added 2 LIF scenes; O/G keys replace C2/C#2 mode-latch)
     const bool isV3 = (ver == 3);
     const bool isV4 = (ver == 4);
     const bool isV5 = (ver == 5);
-    if (!isV3 && !isV4 && !isV5) {
+    const bool isV6 = (ver == 6);
+    if (!isV3 && !isV4 && !isV5 && !isV6) {
         std::cerr << "[App] Ignoring incompatible state file\n";
         return;
     }
-    for (auto& s : scenes_) {
+    // Older saves have 14 scenes; v6 has 16. Read only what was saved.
+    const int savedSceneCount = (isV6) ? NUM_SCENES : 14;
+    for (int si = 0; si < savedSceneCount && si < NUM_SCENES; ++si) {
+        auto& s = scenes_[si];
         int savedModes = isV3 ? 3 : isV4 ? 4 : SceneState::NMODES;
         for (int mi = 0; mi < savedModes; ++mi)
             for (float& v : s.knobs[mi])

@@ -71,6 +71,7 @@ bool MetalCompositor::init() {
     psoCircleQuilt_  = makePSO(@"circle_quilt");
     psoCAGlow_       = makePSO(@"ca_glow");
     psoBitplane_     = makePSO(@"bitplane_reactor");
+    psoLIFNetwork_   = makePSO(@"lif_network");
 
     // Allocate layer textures
     for (int i = 0; i < NUM_LAYERS; ++i)
@@ -325,6 +326,12 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
             break;
         case FxPatchId::MoldTrails:
             pso = psoPassthrough_; // mold_trails kernel needs state — use passthrough for now
+            break;
+        case FxPatchId::LIFNetwork:
+            pso = psoLIFNetwork_;
+            params.float_params[0] = p0;              // threshold 0-1
+            params.float_params[1] = p1;              // topology 0-1
+            params.float_params[2] = t;               // time (animated noise)
             break;
     }
 

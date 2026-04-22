@@ -105,6 +105,7 @@ private:
     id<MTLComputePipelineState> psoCircleQuilt_  = nil;
     id<MTLComputePipelineState> psoCAGlow_       = nil;
     id<MTLComputePipelineState> psoBitplane_     = nil;
+    id<MTLComputePipelineState> psoLIFNetwork_   = nil;
 
     // Per-source-slot rotation textures and angles
     id<MTLTexture>              rotateTex_[NUM_SRC_LAYERS] = {nil, nil, nil};

@@ -83,29 +83,12 @@ void MidiRouter::processEvent(const std::vector<unsigned char>& msg) {
 
     if (onAnyEvent) onAnyEvent(ev);
 
-    // ── Mode latch ───────────────────────────────────────────────────────
+    // ── Scene select ─────────────────────────────────────────────────────
     if (ev.type == MidiEvent::Type::NoteOn) {
-        if (ev.note == NOTE_LAYER_OPACITY_MODE) {
-            mode_ = KnobMode::LayerLevel;
-            if (onModeChange) onModeChange(mode_);
-            return;
-        }
-        if (ev.note == NOTE_FX_AUDIO_MODE) {
-            mode_ = KnobMode::FxAudio;
-            if (onModeChange) onModeChange(mode_);
-            return;
-        }
-        // Scene select
         int sceneIdx = 0;
         if (noteToScene(ev.note, sceneIdx)) {
             if (onSceneSelect) onSceneSelect(sceneIdx);
             return;
-        }
-    }
-    if (ev.type == MidiEvent::Type::NoteOff) {
-        if (ev.note == NOTE_LAYER_OPACITY_MODE || ev.note == NOTE_FX_AUDIO_MODE) {
-            mode_ = KnobMode::FxParam;
-            if (onModeChange) onModeChange(mode_);
         }
     }
 

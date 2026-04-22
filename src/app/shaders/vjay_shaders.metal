@@ -693,3 +693,89 @@ kernel void zoom_source(
     float2 uv = float2(srcX / float(w), srcY / float(h));
     output.write(input.sample(s, uv), gid);
 }
+
+// ── lif_network ───────────────────────────────────────────────────────────────
+// Leaky Integrate-and-Fire (LIF) neuron network modulating image data.
+// Each pixel acts as a LIF neuron driven by local image luminance.
+// Topology parameter varies the neighbourhood connectivity pattern from
+// purely excitatory local coupling to an inhibitory-surround (Mexican-hat)
+// long-range topology, producing distinct spatial activation patterns.
+//
+// float_params[0] = threshold  (0–1): membrane potential firing threshold
+// float_params[1] = topology   (0–1): 0=local excitatory, 1=inhibitory-surround
+// float_params[2] = time (animated noise drift)
+// float_params[7] = RMS audio  (lowers threshold — audio reactivity)
+// float_params[9] = bass band  (modulates topology radius)
+kernel void lif_network(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    // audio: RMS lowers firing threshold (more neurons activate on loud beats)
+    float thresh   = max(0.05f, params.float_params[0] - params.float_params[7] * 0.3f);
+    float topology = params.float_params[1];
+    float t        = params.float_params[2];
+
+    // Connectivity radius: topology 0 → radius 1 (local 3x3),
+    //                      topology 1 → radius 8 (long-range)
+    // audio: bass band widens radius slightly
+    int radius = 1 + int(topology * 7.0f) + int(params.float_params[9] * 2.0f);
+    radius = min(radius, 10); // cap to avoid excessive sampling
+
+    float inner_r = float(radius) * 0.5f;
+
+    // Integrate membrane potential from neighbourhood.
+    // Mexican-hat weight: topology=0 → pure excitatory (all neighbours +1),
+    //                     topology=1 → inhibitory centre, excitatory surround.
+    float potential = 0.0f;
+    float weight_sum = 0.0f;
+    for (int dy = -radius; dy <= radius; ++dy) {
+        for (int dx = -radius; dx <= radius; ++dx) {
+            float d = sqrt(float(dx*dx + dy*dy));
+            if (d > float(radius)) continue;
+
+            float weight;
+            if (topology < 0.5f) {
+                weight = 1.0f;
+            } else {
+                // Smooth Mexican-hat: excitatory surround, inhibitory centre
+                float t2 = (topology - 0.5f) * 2.0f;
+                weight = (d > inner_r) ? 1.0f : -(t2 * 1.5f);
+            }
+
+            uint2 pos = uint2(clamp(int(gid.x)+dx, 0, w-1),
+                              clamp(int(gid.y)+dy, 0, h-1));
+            float lum = dot(input.read(pos).rgb, float3(0.299f, 0.587f, 0.114f));
+            potential += lum * weight;
+            weight_sum += abs(weight);
+        }
+    }
+    if (weight_sum > 0.0f) potential /= weight_sum;
+
+    // Leaky noise: approximates temporal membrane potential drift
+    float drift = snoise(float2(float(gid.x) * 0.012f + t * 0.25f,
+                                float(gid.y) * 0.012f + t * 0.18f)) * 0.12f;
+    potential = clamp(potential + drift, -1.0f, 1.0f);
+
+    float4 src = input.read(gid);
+    float3 result;
+
+    if (potential > thresh) {
+        // Neuron fires: colourise by overshoot and topology
+        float overshoot = clamp((potential - thresh) / max(1.0f - thresh, 0.001f),
+                                0.0f, 1.0f);
+        float hue = fmod(topology * 240.0f + overshoot * 90.0f + t * 18.0f, 360.0f);
+        float3 actColor = hsv_to_rgb(float3(hue, 0.85f, 1.0f));
+        result = mix(src.rgb, actColor, overshoot * 0.75f);
+    } else {
+        // Neuron at rest: slight attenuation proportional to sub-threshold gap
+        float rest = 1.0f - (thresh - potential) * 0.4f;
+        result = src.rgb * clamp(rest, 0.15f, 1.0f);
+    }
+
+    output.write(float4(clamp(result, 0.0f, 1.0f), src.a), gid);
+}
