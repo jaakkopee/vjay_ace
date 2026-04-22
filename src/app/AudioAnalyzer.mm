@@ -52,15 +52,25 @@ bool AudioAnalyzer::start() {
     // Store engine – manual retain so it survives beyond ARC scope
     auUnit_ = (__bridge_retained void*)engine;
 
-    // ── Tap: mix down to mono and feed the FFT pipeline ──────────────────────
+    // ── Player node for passthrough to system output device ──────────────────
+    // Direct inputNode→mainMixerNode connection is unreliable when the input
+    // and output are different hardware devices (e.g. built-in mic + headphones).
+    // Instead we feed captured buffers into an AVAudioPlayerNode.
+    AVAudioPlayerNode* player = [[AVAudioPlayerNode alloc] init];
+    [engine attachNode:player];
+    [engine connect:player to:engine.mainMixerNode format:fmt];
+    playerNode_ = (__bridge_retained void*)player;
+
+    // ── Tap: mix down to mono for FFT analysis + schedule buffer for playback ─
     AudioAnalyzer* selfPtr = this;
     [inputNode installTapOnBus:0
                     bufferSize:FFT_SIZE
                         format:fmt
-                         block:^(AVAudioPCMBuffer* buf, AVAudioTime*) {
+                         block:^(AVAudioPCMBuffer* buf, AVAudioTime* when) {
         if (!buf.floatChannelData || buf.frameLength == 0) return;
         UInt32 nFrames   = buf.frameLength;
         UInt32 nChannels = buf.format.channelCount;
+        // Analysis: mix to mono
         std::vector<float> mono(nFrames, 0.0f);
         for (UInt32 c = 0; c < nChannels; ++c) {
             const float* ch = buf.floatChannelData[c];
@@ -70,10 +80,10 @@ bool AudioAnalyzer::start() {
         float inv = 1.0f / static_cast<float>(nChannels);
         for (float& s : mono) s *= inv;
         selfPtr->processBlock(mono.data(), static_cast<int>(nFrames));
+        // Passthrough: schedule the original buffer on the player node
+        AVAudioPlayerNode* p = (__bridge AVAudioPlayerNode*)selfPtr->playerNode_;
+        [p scheduleBuffer:buf completionHandler:nil];
     }];
-
-    // ── Passthrough: inputNode → mainMixerNode → default output ──────────────
-    [engine connect:inputNode to:engine.mainMixerNode format:fmt];
 
     NSError* err = nil;
     if (![engine startAndReturnError:&err]) {
@@ -86,6 +96,7 @@ bool AudioAnalyzer::start() {
     }
 
     running_ = true;
+    [player play];
     std::cout << "[Audio] Capture + passthrough started ("
               << static_cast<int>(sampleRate_) << " Hz, "
               << fmt.channelCount << "ch)\n";
@@ -95,6 +106,11 @@ bool AudioAnalyzer::start() {
 void AudioAnalyzer::stop() {
     if (!running_) return;
     running_ = false;
+    if (playerNode_) {
+        AVAudioPlayerNode* player = (__bridge_transfer AVAudioPlayerNode*)playerNode_;
+        playerNode_ = nullptr;
+        [player stop];
+    }
     if (auUnit_) {
         AVAudioEngine* engine = (__bridge_transfer AVAudioEngine*)auUnit_;
         auUnit_ = nullptr;

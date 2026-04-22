@@ -58,8 +58,9 @@ private:
 
     bool running_ = false;
 
-    // AVAudioEngine stored as opaque pointer (Objective-C object, manual retain)
-    void* auUnit_ = nullptr;
+    // AVAudioEngine + AVAudioPlayerNode stored as opaque pointers (manual ARC retain)
+    void* auUnit_    = nullptr;  // AVAudioEngine
+    void* playerNode_= nullptr;  // AVAudioPlayerNode for passthrough
     float sampleRate_ = 44100.0f;
 
     // vDSP FFT state (opaque pointer to avoid header coupling)
