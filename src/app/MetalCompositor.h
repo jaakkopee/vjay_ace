@@ -63,6 +63,13 @@ public:
     // Set per-FX audio gain multiplier (applied to bands+RMS before shader injection).
     void setAudioGain(int fxSlot, float gain);
 
+    // Begin a crossfade for a source slot — call BEFORE uploading the new image.
+    // Captures the current frame and resets the blend progress to 0.
+    void beginCrossfade(int srcSlot);
+
+    // Set how long (in seconds) a crossfade takes for a source slot (0.1–8.0).
+    void setCrossfadeSpeed(int srcSlot, float seconds);
+
     // Composite all layers into outputTexture and return a CPU RGBA8 snapshot
     // at WORK_W x WORK_H for blit into the SFML window.
     // Returns false if not initialised.
@@ -111,6 +118,7 @@ private:
     id<MTLComputePipelineState> psoCAGlow_       = nil;
     id<MTLComputePipelineState> psoBitplane_     = nil;
     id<MTLComputePipelineState> psoLIFNetwork_   = nil;
+    id<MTLComputePipelineState> psoCrossfade_    = nil;
 
     // Per-source-slot rotation textures and angles
     id<MTLTexture>              rotateTex_[NUM_SRC_LAYERS] = {nil, nil, nil};
@@ -126,6 +134,13 @@ private:
     float                       panY_[NUM_SRC_LAYERS]      = {0.0f, 0.0f, 0.0f};
 
     id<MTLComputePipelineState> psoPan_ = nil;
+
+    // Per-source-slot crossfade state
+    id<MTLTexture>              crossfadeTex_[NUM_SRC_LAYERS]      = {nil, nil, nil};
+    id<MTLTexture>              crossfadeBlendTex_[NUM_SRC_LAYERS] = {nil, nil, nil};
+    float                       crossfadeProgress_[NUM_SRC_LAYERS] = {1.0f, 1.0f, 1.0f};
+    float                       crossfadeSpeed_[NUM_SRC_LAYERS]    = {1.0f, 1.0f, 1.0f};
+    float                       lastFrameTime_ = 0.0f;
 
     std::array<float, NUM_LAYERS>          opacity_  = {1,1,1,1,1,1};
     std::array<FxPatchId, NUM_FX_LAYERS>   patches_  = {};

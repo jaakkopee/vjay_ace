@@ -123,7 +123,7 @@ void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
     midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
     midi_.onModeChange = [this](KnobMode m){
-        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_) return;  // modifier key overrides; ignore while held
+        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
         controlWin_.setKnobMode(m);
         static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
@@ -143,11 +143,19 @@ void App::wireCallbacks() {
 
     // ── Shared helper: update display after a modifier key press/release ──
     auto refreshModifierDisplay = [this]() {
-        static const char* rotNames[]  = {"Rot L0",  "-", "Rot L1",  "-", "Rot L2",  "-"};
-        static const char* zoomNames[] = {"Zoom L0", "-", "Zoom L1", "-", "Zoom L2", "-"};
-        static const char* opNames[]   = {"Opac L0", "-", "Opac L1", "-", "Opac L2", "-"};
-        static const char* gainNames[] = {"Gain 0", "-", "Gain 1", "-", "Gain 2", "-"};
-        static const char* panNames[]  = {"Pan0 X",  "Pan0 Y", "Pan1 X",  "Pan1 Y", "Pan2 X",  "Pan2 Y"};
+        static const char* rotNames[]   = {"Rot L0",    "-", "Rot L1",    "-", "Rot L2",    "-"};
+        static const char* zoomNames[]  = {"Zoom L0",   "-", "Zoom L1",   "-", "Zoom L2",   "-"};
+        static const char* opNames[]    = {"Opac L0",   "-", "Opac L1",   "-", "Opac L2",   "-"};
+        static const char* gainNames[]  = {"Gain 0",    "-", "Gain 1",    "-", "Gain 2",    "-"};
+        static const char* panNames[]   = {"Pan0 X", "Pan0 Y", "Pan1 X", "Pan1 Y", "Pan2 X", "Pan2 Y"};
+        static const char* xfadeNames[] = {"Xfade 0",   "-", "Xfade 1",   "-", "Xfade 2",   "-"};
+        if (fKeyHeld_) {
+            // F key overrides: show crossfade speed mode regardless of effectiveMode()
+            controlWin_.setKnobMode(KnobMode::FxParam); // reuse any label; will be overridden below
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, xfadeNames[i]);
+            refreshKnobDisplay();
+            return;
+        }
         KnobMode eff = effectiveMode();
         controlWin_.setKnobMode(eff);
         if (eff == KnobMode::ImgRotate) {
@@ -189,6 +197,11 @@ void App::wireCallbacks() {
     controlWin_.onPKey = [this, refreshModifierDisplay](bool pressed) {
         if (pressed == pKeyHeld_) return;
         pKeyHeld_ = pressed;
+        refreshModifierDisplay();
+    };
+    controlWin_.onFKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == fKeyHeld_) return;
+        fKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
     controlWin_.onBKey = [this](bool bypassed) {
@@ -280,6 +293,17 @@ void App::refreshKnobParamNames() {
 
 void App::refreshKnobDisplay() {
     if (currentScene_ < 0) return;
+
+    // F key mode: show crossfade speed values for even knobs, 0 for odd.
+    if (fKeyHeld_) {
+        for (int k = 0; k < NUM_KNOBS; ++k) {
+            if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
+            int slot = k / 2;
+            controlWin_.setKnobValue(k, static_cast<int>(crossfadeSpeedNorm_[slot] * 127.0f));
+        }
+        return;
+    }
+
     KnobMode eff = effectiveMode();
     int mi = static_cast<int>(eff);
     const SceneState& s = scenes_[currentScene_];
@@ -314,7 +338,18 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     // If a modifier key is held, override to its mode
     KnobMode effectiveMod = effectiveMode();
     // Only use MIDI-provided mode when no key is held
-        KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_) ? effectiveMod : mode;
+        KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_) ? effectiveMod : mode;
+
+    // F key intercept: set crossfade speed for the even knob's slot, don't store in scene.
+    if (fKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+            int slot = knobIdx / 2;
+            crossfadeSpeedNorm_[slot] = normValue;
+            compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
+            controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        }
+        return;
+    }
     int    mi   = static_cast<int>(eff);
     float& soft = scenes_[currentScene_].knobs[mi][knobIdx];
 
@@ -389,6 +424,18 @@ void App::onSceneSelect(int sceneIdx) {
 
 void App::onKnobDrag(int knobIdx, float normValue) {
     if (currentScene_ < 0) return;
+
+    // F key intercept: set crossfade speed, don't store in scene.
+    if (fKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+            int slot = knobIdx / 2;
+            crossfadeSpeedNorm_[slot] = normValue;
+            compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
+        }
+        controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        return;
+    }
+
     int mi = static_cast<int>(knobMode_);
     // GUI drag bypasses pickup: write directly to scene and sync physical tracker.
     scenes_[currentScene_].knobs[mi][knobIdx] = normValue;
@@ -403,6 +450,7 @@ void App::onImageSelected(int slotIdx, const std::string& path) {
     if (slotIdx < 0 || slotIdx >= NUM_SRC_LAYERS) return;
     if (currentScene_ >= 0)
         scenes_[currentScene_].imgPaths[slotIdx] = path;
+    compositor_.beginCrossfade(slotIdx);  // capture current frame before new image uploads
     layers_.loadMedia(slotIdx * 2, path);
     saveState();  // persist immediately — don't rely on clean exit
 }

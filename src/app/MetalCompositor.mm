@@ -73,6 +73,7 @@ bool MetalCompositor::init() {
     psoBitplane_     = makePSO(@"bitplane_reactor");
     psoLIFNetwork_   = makePSO(@"lif_network");
     psoPan_          = makePSO(@"pan_source");
+    psoCrossfade_    = makePSO(@"crossfade_blend");
 
     // Allocate layer textures
     for (int i = 0; i < NUM_LAYERS; ++i)
@@ -87,6 +88,8 @@ bool MetalCompositor::init() {
         rotateTex_[s] = makeTexture(WORK_W, WORK_H);
         zoomTex_[s]   = makeTexture(WORK_W, WORK_H);
         panTex_[s]    = makeTexture(WORK_W, WORK_H);
+        crossfadeTex_[s]      = makeTexture(WORK_W, WORK_H);
+        crossfadeBlendTex_[s] = makeTexture(WORK_W, WORK_H);
     }
 
     // CPU-readable buffer for readback (RGBA8, 4 bytes/pixel)
@@ -204,6 +207,27 @@ void MetalCompositor::setAudioBands(const float* bands, int count, float rms) {
 void MetalCompositor::setAudioGain(int fxSlot, float gain) {
     if (fxSlot >= 0 && fxSlot < NUM_FX_LAYERS)
         audioGain_[fxSlot] = gain;
+}
+
+void MetalCompositor::beginCrossfade(int srcSlot) {
+    assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
+    // Capture the current source frame into crossfadeTex_ before the new image arrives.
+    id<MTLCommandBuffer> cmd = [cmdQueue_ commandBuffer];
+    id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
+    [blit copyFromTexture:layerTex_[srcSlot * 2] sourceSlice:0 sourceLevel:0
+             sourceOrigin:MTLOriginMake(0, 0, 0)
+               sourceSize:MTLSizeMake(WORK_W, WORK_H, 1)
+               toTexture:crossfadeTex_[srcSlot] destinationSlice:0 destinationLevel:0
+      destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+    crossfadeProgress_[srcSlot] = 0.0f;
+}
+
+void MetalCompositor::setCrossfadeSpeed(int srcSlot, float seconds) {
+    assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
+    crossfadeSpeed_[srcSlot] = std::max(seconds, 0.05f);
 }
 
 // ── dispatch helper ───────────────────────────────────────────────────────────
@@ -411,7 +435,11 @@ void MetalCompositor::runComposite(id<MTLCommandBuffer> cmd,
 
 bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
     if (!device_ || !outputTex_) return false;
-    frameTime_ = elapsedSeconds();
+    float now = elapsedSeconds();
+    float dt  = (lastFrameTime_ > 0.0f) ? (now - lastFrameTime_) : 0.016f;
+    dt = std::min(dt, 0.1f); // clamp to avoid large jumps after pauses
+    lastFrameTime_ = now;
+    frameTime_     = now;
 
     id<MTLCommandBuffer> cmd = [cmdQueue_ commandBuffer];
 
@@ -421,12 +449,34 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
     const int fxLayerIndices[NUM_FX_LAYERS] = {1, 3, 5};
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
         int li = fxLayerIndices[slot];
+
+        // 0. Crossfade blend (optional) — blends old capture with new source frame.
+        id<MTLTexture> srcTex = layerTex_[li - 1];
+        if (crossfadeProgress_[slot] < 1.0f) {
+            crossfadeProgress_[slot] = std::min(1.0f,
+                crossfadeProgress_[slot] + dt / crossfadeSpeed_[slot]);
+            ShaderParams cp{};
+            cp.float_params[0] = crossfadeProgress_[slot];
+            id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+            [enc setComputePipelineState:psoCrossfade_];
+            [enc setTexture:crossfadeTex_[slot]      atIndex:0]; // old
+            [enc setTexture:layerTex_[li - 1]        atIndex:1]; // new
+            [enc setTexture:crossfadeBlendTex_[slot] atIndex:2]; // output
+            [enc setBytes:&cp length:sizeof(cp) atIndex:0];
+            MTLSize threads      = {psoCrossfade_.threadExecutionWidth, 8, 1};
+            MTLSize threadGroups = {(WORK_W + threads.width  - 1) / threads.width,
+                                    (WORK_H + threads.height - 1) / threads.height, 1};
+            [enc dispatchThreadgroups:threadGroups threadsPerThreadgroup:threads];
+            [enc endEncoding];
+            srcTex = crossfadeBlendTex_[slot];
+        }
+
         // 1. Rotation pre-pass
         {
             ShaderParams rp{};
             rp.float_params[0] = rotations_[slot];
             id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-            dispatch(enc, psoRotate_, layerTex_[li - 1], rotateTex_[slot], rp);
+            dispatch(enc, psoRotate_, srcTex, rotateTex_[slot], rp);
             [enc endEncoding];
         }
         // 2. Zoom pre-pass (rotate output → zoom output)

@@ -694,6 +694,23 @@ kernel void zoom_source(
     output.write(input.sample(s, uv), gid);
 }
 
+// ── crossfade_blend ───────────────────────────────────────────────────────────
+// Blends two source textures for layer crossfade transitions.
+// texture(0) = old frame, texture(1) = new frame, texture(2) = output
+// float_params[0] = blend factor (0.0 = all old, 1.0 = all new)
+kernel void crossfade_blend(
+    texture2d<float, access::read>  src0   [[texture(0)]],
+    texture2d<float, access::read>  src1   [[texture(1)]],
+    texture2d<float, access::write> output [[texture(2)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = src1.get_width(), h = src1.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+    float t = clamp(params.float_params[0], 0.0f, 1.0f);
+    output.write(mix(src0.read(gid), src1.read(gid), t), gid);
+}
+
 // ── pan_source ────────────────────────────────────────────────────────────────
 // Translates (pans) a source texture by a fractional pixel offset.
 // float_params[0] = panX  (-1.0 = full left,  0.0 = centre, +1.0 = full right)
