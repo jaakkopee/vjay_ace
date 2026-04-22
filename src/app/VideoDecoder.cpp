@@ -125,9 +125,13 @@ bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
                   rgbaFrame_->data, rgbaFrame_->linesize);
         av_frame_unref(frame_);
 
-        // Blit fitted image centred into a zero-padded outW_*outH_ buffer
+        // Blit fitted image centred into an opaque-black-padded outW_*outH_ buffer
         std::size_t byteCount = outW_ * outH_ * 4;
-        outRGBA.assign(byteCount, 0);  // black padding
+        outRGBA.assign(byteCount, 0);  // zero R,G,B first
+        // Set alpha=255 for all pixels so padding is opaque black, not transparent.
+        // Transparent padding causes FX like kaleidoscope to lose pixels that fold
+        // into letterbox/pillarbox regions.
+        for (std::size_t i = 3; i < byteCount; i += 4) outRGBA[i] = 255;
         const uint8_t* src = rgbaFrame_->data[0];
         int srcStride = rgbaFrame_->linesize[0];
         for (int row = 0; row < fitH_; ++row) {
