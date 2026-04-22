@@ -1,7 +1,7 @@
 # vjay_ace
 
 Real-time GPU VJ compositor for live performance on macOS / Apple Silicon.  
-Three source layers, three FX layers, 14 scenes, 6 MIDI knobs.
+Three source layers, three FX layers, 16 scenes, 6 MIDI knobs.
 
 ---
 
@@ -78,12 +78,12 @@ State is persisted to `~/.vjay_ace_state` on every scene change.
 
 ### Knob modes
 
-Hold a mode pad to switch all 6 knobs simultaneously. Release to return to FxParam mode.
+Hold a mode key to switch all 6 knobs simultaneously. Release to return to FxParam mode.
 
-| Pad note | Mode | Knobs 0–5 control |
+| Key | Mode | Knobs 0–5 control |
 |---|---|---|
-| C2 (36) | **Layer Opacity** | Layers 0–5 opacity (0 = invisible, 1 = full) |
-| C#2 (37) | **FX / Audio** | Gain for FX layers 0–2; bandpass frequency 100–8000 Hz |
+| O (held) | **Layer Opacity** | Layers 0–5 opacity (0 = invisible, 1 = full) |
+| G (held) | **FX / Audio** | Gain for FX layers 0–2; bandpass frequency 100–8000 Hz |
 | *(default)* | **FX Param** | Two params per FX slot (slot 0: knobs 0–1, slot 1: knobs 2–3, slot 2: knobs 4–5) |
 
 **Modifier keys** (held while in FxParam mode):
@@ -99,7 +99,7 @@ Hold a mode pad to switch all 6 knobs simultaneously. Release to return to FxPar
 
 ### Scene select
 
-MIDI notes D2–D#3 (38–51) select scenes 0–13.
+MIDI notes C2–C#3 (36–51) select scenes 0–15.
 
 ---
 
@@ -184,26 +184,33 @@ Full stateful agent simulation (ping-pong buffer) planned.
 - **P1:** Sensor angle  
 - **P2:** Decay rate
 
+### LIF Network
+Leaky Integrate-and-Fire neuron network applied to image data. Each pixel is treated as a LIF neuron receiving synaptic input from its neighborhood. The topology parameter smoothly transitions from local excitatory coupling (radius 1 grid — small clusters light up) to an inhibitory-centre / excitatory-surround (Mexican-hat) long-range topology that creates edge-highlighted activation patterns. Audio RMS lowers the firing threshold, making beats trigger broader neuron cascades.  
+- **P1:** Firing threshold (0–1; lower = more neurons fire)  
+- **P2:** Topology (0 = local excitatory, 1 = inhibitory-surround long-range)
+
 ---
 
-## Scenes (D2–D#3)
+## Scenes (C2–C#3)
 
 | # | Note | Name | FX slot 0 | FX slot 1 | FX slot 2 |
 |---|---|---|---|---|---|
-| 0 | D2 | Pass-Through | Passthrough | Passthrough | Passthrough |
-| 1 | D#2 | Kaleidoscope | Kaleidoscope | Hue Cycle | Passthrough |
-| 2 | E2 | Rainbow | Rainbow Shift | Rainbow Shift | Rainbow Shift |
-| 3 | F2 | Pixelate | Pixelate | Hue Cycle | Passthrough |
-| 4 | F#2 | Julia | Julia Fractal | Chroma Aberr | Passthrough |
-| 5 | G2 | Glitch Storm | Video Glitch | Wave Distort | Chroma Aberr |
-| 6 | G#2 | Feedback Tunnel | Feedback Zoom | Hue Cycle | Passthrough |
-| 7 | A2 | Circle Quilt | Circle Quilt | Passthrough | Passthrough |
-| 8 | A#2 | CA Glow | CA Glow | CA Glow | Passthrough |
-| 9 | B2 | Bitplane | Bitplane Reactor | Passthrough | Hue Cycle |
-| 10 | C3 | Blur Haze | Blur | Blur | Passthrough |
-| 11 | C#3 | Ink Rainbow | Edge Ink | Rainbow Shift | Passthrough |
-| 12 | D3 | Deep Space | Julia Fractal | Feedback Zoom | CA Glow |
-| 13 | D#3 | Total Chaos | Video Glitch | Kaleidoscope | Bitplane Reactor |
+| 0 | C2 | Pass-Through | Passthrough | Passthrough | Passthrough |
+| 1 | C#2 | Kaleidoscope | Kaleidoscope | Hue Cycle | Passthrough |
+| 2 | D2 | Rainbow | Rainbow Shift | Rainbow Shift | Rainbow Shift |
+| 3 | D#2 | Pixelate | Pixelate | Hue Cycle | Passthrough |
+| 4 | E2 | Julia | Julia Fractal | Chroma Aberr | Passthrough |
+| 5 | F2 | Glitch Storm | Video Glitch | Wave Distort | Chroma Aberr |
+| 6 | F#2 | Feedback Tunnel | Feedback Zoom | Hue Cycle | Passthrough |
+| 7 | G2 | Circle Quilt | Circle Quilt | Passthrough | Passthrough |
+| 8 | G#2 | CA Glow | CA Glow | CA Glow | Passthrough |
+| 9 | A2 | Bitplane | Bitplane Reactor | Passthrough | Hue Cycle |
+| 10 | A#2 | Blur Haze | Blur | Blur | Passthrough |
+| 11 | B2 | Ink Rainbow | Edge Ink | Rainbow Shift | Passthrough |
+| 12 | C3 | Deep Space | Julia Fractal | Feedback Zoom | CA Glow |
+| 13 | C#3 | Total Chaos | Video Glitch | Kaleidoscope | Bitplane Reactor |
+| 14 | D3 | Neural Glow | LIF Network | Hue Cycle | Passthrough |
+| 15 | D#3 | Synapse Storm | LIF Network | Wave Distort | LIF Network |
 
 ---
 

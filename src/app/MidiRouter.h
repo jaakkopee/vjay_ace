@@ -13,10 +13,14 @@
 // Controller layout (6 CCs per frame — exact CC numbers TBD by user):
 //   CC_LAYER_KNOB_BASE + 0..5 → knob 0..5
 //
-// Special note-on messages (latch while held):
-//   NOTE_LAYER_OPACITY_MODE (C2=36)  → KnobMode::LayerLevel  (knobs 0-2 = FX layer opacity)
-//   NOTE_FX_AUDIO_MODE      (C#2=37) → KnobMode::FxAudio
-//   (all other note-ons)             → KnobMode::FxParam + dispatch FX patch select
+// Special note-on messages:
+//   NOTE_SCENE_BASE + 0..15 (C2=36 … C#3=51) → scene select
+//
+// Mode switching is now via keyboard keys in the control window:
+//   O held → KnobMode::LayerLevel (layer opacity)
+//   G held → KnobMode::FxAudio    (audio gain)
+//   R held → KnobMode::ImgRotate
+//   Z held → KnobMode::ImgZoom
 
 struct MidiEvent {
     enum class Type { NoteOn, NoteOff, CC, Other };

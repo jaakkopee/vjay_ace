@@ -34,13 +34,9 @@ inline int ccToKnobIndex(int cc) {
     return -1;
 }
 
-// Special note mappings (channel 1, note numbers)
-inline constexpr int NOTE_LAYER_OPACITY_MODE  = 36; // C2  held → 3 knobs = FX layer opacities
-inline constexpr int NOTE_FX_AUDIO_MODE       = 37; // C#2 held → 6 knobs = audio gain
-
-// FX patch select notes start at D2 = 38
-inline constexpr int NOTE_SCENE_BASE = 38;   // D2
-inline constexpr int NUM_SCENES      = 14;   // D2 (38) … D#3 (51)
+// FX patch select notes start at C2 = 36 (freed from mode-latch — modes now on O/G keys)
+inline constexpr int NOTE_SCENE_BASE = 36;   // C2
+inline constexpr int NUM_SCENES      = 16;   // C2 (36) … C#3 (51)
 
 // ── Knob value range ────────────────────────────────────────────────────────
 inline constexpr int CC_MIN = 0;
@@ -83,6 +79,7 @@ enum class FxPatchId : int {
     CircleQuilt    = 15,
     CAGlow         = 16,
     BitplaneReactor= 17,
+    LIFNetwork     = 18,
     COUNT
 };
 
@@ -106,6 +103,7 @@ inline const char* fxPatchName(FxPatchId id) {
         case FxPatchId::CircleQuilt:    return "Circle Quilt";
         case FxPatchId::CAGlow:         return "CA Glow";
         case FxPatchId::BitplaneReactor:return "Bitplane";
+        case FxPatchId::LIFNetwork:     return "LIF Network";
         default:                        return "???";
     }
 }
@@ -145,6 +143,8 @@ inline const char* fxParamName(FxPatchId id, int paramIdx) {
             return paramIdx == 0 ? "Threshold" : "Glow Spread";
         case FxPatchId::BitplaneReactor:
             return paramIdx == 0 ? "CA Rule" : "Threshold";
+        case FxPatchId::LIFNetwork:
+            return paramIdx == 0 ? "Threshold" : "Topology";
         default:
             return paramIdx == 0 ? "P1" : "P2";
     }
@@ -152,8 +152,8 @@ inline const char* fxParamName(FxPatchId id, int paramIdx) {
 
 // ── KnobMode ────────────────────────────────────────────────────────────────
 enum class KnobMode {
-    LayerLevel,   // C2  held: knobs 0-2 → FX layer opacities (layers 1, 3, 5)
-    FxAudio,      // C#2 held: knobs 0-5 → per-FX audio gain
+    LayerLevel,   // O key held: knobs 0-2 → FX layer opacities (layers 1, 3, 5)
+    FxAudio,      // G key held: knobs 0-5 → per-FX audio gain
     FxParam,      // default: knobs control active FX patch params 1 & 2 per FX layer
     ImgRotate,    // R key held: knobs 0-2 → rotation (0–2π) for layers 0, 2, 4
     ImgZoom,      // Z key held: knobs 0-2 → zoom factor for layers 0, 2, 4
@@ -254,4 +254,14 @@ inline constexpr Scene SCENES[NUM_SCENES] = {
     { "Total Chaos",
       { FxPatchId::VideoGlitch, FxPatchId::Kaleidoscope, FxPatchId::BitplaneReactor },
       { {0.7f,0.6f}, {0.5f,0.3f}, {0.85f,0.5f} } },
+
+    // 14  E3   – LIF local topology + hue drift
+    { "Neural Glow",
+      { FxPatchId::LIFNetwork, FxPatchId::HueCycle, FxPatchId::Passthrough },
+      { {0.45f,0.2f}, {0.3f,0.5f}, {0.5f,0.5f} } },
+
+    // 15  F3   – LIF long-range inhibitory topology + wave distort
+    { "Synapse Storm",
+      { FxPatchId::LIFNetwork, FxPatchId::WaveDistort, FxPatchId::LIFNetwork },
+      { {0.35f,0.8f}, {0.4f,0.3f}, {0.5f,0.5f} } },
 };
