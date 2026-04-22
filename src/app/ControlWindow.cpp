@@ -332,9 +332,11 @@ void ControlWindow::drawAudioMeter() {
 void ControlWindow::render(const sf::Texture& compositePreview) {
     window_.clear(sf::Color(16, 16, 20));
 
-    // Video monitor: letterboxed in right half
-    const float pw   = static_cast<float>(window_.getSize().x - leftColW_);
-    const float ph   = static_cast<float>(window_.getSize().y);
+    // Video monitor: letterboxed in right half.
+    // Use view size (logical units) so positions are consistent with drawing coordinates.
+    const sf::Vector2f viewSize = window_.getView().getSize();
+    const float pw   = viewSize.x - static_cast<float>(leftColW_);
+    const float ph   = viewSize.y;
     const float texW = static_cast<float>(compositePreview.getSize().x);
     const float texH = static_cast<float>(compositePreview.getSize().y);
     if (pw > 0 && ph > 0 && texW > 0 && texH > 0) {

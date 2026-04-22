@@ -38,17 +38,19 @@ void PerformanceWindow::present(const std::vector<uint8_t>& rgbaPixels) {
 
     outputTex_.update(rgbaPixels.data());
 
-    // Scale to fit screen, preserving aspect ratio (letterbox/pillarbox with black bars)
+    // Scale to fit screen, preserving aspect ratio (letterbox/pillarbox with black bars).
+    // Use the view size (logical/point units) rather than getSize() (physical pixels) so
+    // that sprite positions and scales stay in the same coordinate system as drawing.
     sf::Sprite spr(outputTex_);
-    auto wSize = window_.getSize();
-    float scaleX = static_cast<float>(wSize.x) / static_cast<float>(WORK_W);
-    float scaleY = static_cast<float>(wSize.y) / static_cast<float>(WORK_H);
+    const sf::Vector2f viewSize = window_.getView().getSize();
+    float scaleX = viewSize.x / static_cast<float>(WORK_W);
+    float scaleY = viewSize.y / static_cast<float>(WORK_H);
     float scale  = std::min(scaleX, scaleY);
     spr.setScale({scale, scale});
 
-    // Center within the window
-    float offX = (static_cast<float>(wSize.x) - WORK_W * scale) * 0.5f;
-    float offY = (static_cast<float>(wSize.y) - WORK_H * scale) * 0.5f;
+    // Center within the view
+    float offX = (viewSize.x - WORK_W * scale) * 0.5f;
+    float offY = (viewSize.y - WORK_H * scale) * 0.5f;
     spr.setPosition({offX, offY});
 
     window_.clear(sf::Color::Black);
