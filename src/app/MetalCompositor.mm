@@ -363,7 +363,7 @@ void MetalCompositor::runComposite(id<MTLCommandBuffer> cmd,
         if (!groups[i]) continue;
         int nxt = 1 - cur;
         ShaderParams p{};
-        p.float_params[0] = opacity_[i * 2]; // source layer opacity
+        p.float_params[0] = opacity_[i * 2 + 1]; // FX layer opacity (LayerLevel knob)
         id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
         [enc setComputePipelineState:psoComposite_];
         [enc setTexture:scratch_[cur] atIndex:0]; // bottom
@@ -418,33 +418,9 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
             dispatch(enc, psoZoom_, rotateTex_[slot], zoomTex_[slot], zp);
             [enc endEncoding];
         }
-        // 3. FX pass on fully-transformed source
+        // 3. FX pass on fully-transformed source → layerTex_[li] (always full FX)
         runFxPass(cmd, slot, zoomTex_[slot], layerTex_[li]);
-        // 4. Blend FX output with pre-FX source using the FX layer's opacity.
-        //    opacity_[li] == 1.0 → full FX; 0.0 → unprocessed source.
-        if (psoFxBlend_) {
-            ShaderParams bp{};
-            bp.float_params[0] = opacity_[li];
-            id<MTLComputeCommandEncoder> benc = [cmd computeCommandEncoder];
-            [benc setComputePipelineState:psoFxBlend_];
-            [benc setTexture:zoomTex_[slot] atIndex:0]; // pre-FX
-            [benc setTexture:layerTex_[li]  atIndex:1]; // post-FX
-            [benc setTexture:scratch_[1]    atIndex:2]; // temp output
-            [benc setBytes:&bp length:sizeof(bp) atIndex:0];
-            MTLSize bthr = {psoFxBlend_.threadExecutionWidth, 8, 1};
-            MTLSize bgrp = {(WORK_W + bthr.width  - 1) / bthr.width,
-                            (WORK_H + bthr.height - 1) / bthr.height, 1};
-            [benc dispatchThreadgroups:bgrp threadsPerThreadgroup:bthr];
-            [benc endEncoding];
-            // Commit blend result back into the FX layer texture.
-            id<MTLBlitCommandEncoder> blitFx = [cmd blitCommandEncoder];
-            [blitFx copyFromTexture:scratch_[1] sourceSlice:0 sourceLevel:0
-                       sourceOrigin:MTLOriginMake(0,0,0)
-                         sourceSize:MTLSizeMake(WORK_W, WORK_H, 1)
-                          toTexture:layerTex_[li] destinationSlice:0 destinationLevel:0
-             destinationOrigin:MTLOriginMake(0,0,0)];
-            [blitFx endEncoding];
-        }
+        // Opacity is applied in the final composite via opacity_[li], not here.
     }
 
     // Composite: group0 = (layer0 modulated by layer1), etc.

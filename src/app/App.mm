@@ -2,6 +2,14 @@
 #import  <AppKit/AppKit.h>  // NSScreen for display positions
 #include <iostream>
 #include <fstream>
+#include <csignal>
+
+// ── Signal handling: save state on Ctrl-C / kill ─────────────────────────────
+static App* g_sigApp = nullptr;
+static void appSigHandler(int) {
+    if (g_sigApp) g_sigApp->saveState();
+    std::_Exit(0);
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +42,11 @@ App::App() = default;
 App::~App() = default;
 
 bool App::init() {
+    // ── Register signal handlers so Ctrl-C saves state before exit ───────
+    g_sigApp = this;
+    std::signal(SIGINT,  appSigHandler);
+    std::signal(SIGTERM, appSigHandler);
+
     // ── Metal compositor ─────────────────────────────────────────────────
     if (!compositor_.init()) {
         std::cerr << "[App] Metal compositor init failed — GPU unavailable\n";
@@ -180,7 +193,8 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
         case KnobMode::LayerLevel:
             if (knobIdx < NUM_FX_LAYERS) {
                 int fxLayer = knobIdx * 2 + 1;  // knob 0→layer1, 1→layer3, 2→layer5
-                compositor_.setLayerOpacity(fxLayer, v);
+                layers_.setOpacity(fxLayer, v);          // stored so syncCompositorState reads it
+                compositor_.setLayerOpacity(fxLayer, v); // immediate effect
             }
             break;
         case KnobMode::FxAudio:
@@ -357,6 +371,7 @@ void App::onImageSelected(int slotIdx, const std::string& path) {
     if (currentScene_ >= 0)
         scenes_[currentScene_].imgPaths[slotIdx] = path;
     layers_.loadMedia(slotIdx * 2, path);
+    saveState();  // persist immediately — don't rely on clean exit
 }
 
 // ── State persistence ─────────────────────────────────────────────────────────

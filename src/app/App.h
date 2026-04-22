@@ -52,6 +52,7 @@ public:
 
     bool init();
     void run();
+    void saveState() const;   // public: called by signal handler and onImageSelected
 
 private:
     // Subsystems
@@ -122,7 +123,6 @@ private:
     void syncCompositorState();
 
     // ── State persistence ────────────────────────────────────────────────
-    void saveState() const;   // writes scenes_ + currentScene_ to ~/.vjay_ace_state
     void loadState();         // reads file → restores scenes_ + applies to engine
     static std::string statePath();
 };

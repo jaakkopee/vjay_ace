@@ -38,14 +38,18 @@ void PerformanceWindow::present(const std::vector<uint8_t>& rgbaPixels) {
 
     outputTex_.update(rgbaPixels.data());
 
-    // Scale to fill screen, maintaining aspect ratio
+    // Scale to fit screen, preserving aspect ratio (letterbox/pillarbox with black bars)
     sf::Sprite spr(outputTex_);
     auto wSize = window_.getSize();
     float scaleX = static_cast<float>(wSize.x) / static_cast<float>(WORK_W);
     float scaleY = static_cast<float>(wSize.y) / static_cast<float>(WORK_H);
-    // Use fill (stretch): for projection, stretching to fill is often preferred
-    // Switch to std::min(scaleX, scaleY) to preserve aspect ratio instead.
-    spr.setScale({scaleX, scaleY});
+    float scale  = std::min(scaleX, scaleY);
+    spr.setScale({scale, scale});
+
+    // Center within the window
+    float offX = (static_cast<float>(wSize.x) - WORK_W * scale) * 0.5f;
+    float offY = (static_cast<float>(wSize.y) - WORK_H * scale) * 0.5f;
+    spr.setPosition({offX, offY});
 
     window_.clear(sf::Color::Black);
     window_.draw(spr);
