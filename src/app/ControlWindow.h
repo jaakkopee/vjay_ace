@@ -74,6 +74,9 @@ public:
     // Fired when the F key is pressed (true) or released (false) → XFade speed mode
     std::function<void(bool pressed)> onFKey;
 
+    // Fired when the C key is pressed (true) or released (false) → scene XFade speed mode
+    std::function<void(bool pressed)> onCKey;
+
     // Fired when the B key is toggled (true = bypassed, false = active)
     std::function<void(bool bypassed)> onBKey;
 
@@ -113,6 +116,7 @@ private:
     bool gKeyWas_ = false;
     bool pKeyWas_ = false;
     bool fKeyWas_ = false;
+    bool cKeyWas_ = false;
     bool bKeyWas_ = false;
     bool audioBypassed_ = false;
 

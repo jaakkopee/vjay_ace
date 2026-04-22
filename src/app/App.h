@@ -75,10 +75,13 @@ private:
     bool     gKeyHeld_  = false;  // G held → FxAudio mode
     bool     pKeyHeld_  = false;  // P held → ImgPan mode
     bool     fKeyHeld_  = false;  // F held → crossfade speed mode
+    bool     cKeyHeld_  = false;  // C held → scene-change crossfade speed mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
     // Normalized crossfade speed per slot (0–1) — displayed when F is held
     std::array<float, NUM_SRC_LAYERS> crossfadeSpeedNorm_ = {0.1f, 0.1f, 0.1f};
+    // Normalized scene-change crossfade speed per slot (0–1) — displayed when C is held
+    std::array<float, NUM_SRC_LAYERS> sceneCrossfadeSpeedNorm_ = {0.1f, 0.1f, 0.1f};
 
     // Returns the effective mode considering modifier keys.
     KnobMode effectiveMode() const {

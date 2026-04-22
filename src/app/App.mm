@@ -123,7 +123,7 @@ void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
     midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
     midi_.onModeChange = [this](KnobMode m){
-        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_) return;  // modifier key overrides; ignore while held
+        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
         controlWin_.setKnobMode(m);
         static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
@@ -148,11 +148,19 @@ void App::wireCallbacks() {
         static const char* opNames[]    = {"Opac L0",   "-", "Opac L1",   "-", "Opac L2",   "-"};
         static const char* gainNames[]  = {"Gain 0",    "-", "Gain 1",    "-", "Gain 2",    "-"};
         static const char* panNames[]   = {"Pan0 X", "Pan0 Y", "Pan1 X", "Pan1 Y", "Pan2 X", "Pan2 Y"};
-        static const char* xfadeNames[] = {"Xfade 0",   "-", "Xfade 1",   "-", "Xfade 2",   "-"};
+        static const char* xfadeNames[]  = {"ImgFd 0",   "-", "ImgFd 1",   "-", "ImgFd 2",   "-"};
+        static const char* scnFdNames[]  = {"ScnFd 0",   "-", "ScnFd 1",   "-", "ScnFd 2",   "-"};
         if (fKeyHeld_) {
-            // F key overrides: show crossfade speed mode regardless of effectiveMode()
+            // F key overrides: show image-load crossfade speed mode
             controlWin_.setKnobMode(KnobMode::FxParam); // reuse any label; will be overridden below
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, xfadeNames[i]);
+            refreshKnobDisplay();
+            return;
+        }
+        if (cKeyHeld_) {
+            // C key overrides: show scene-change crossfade speed mode
+            controlWin_.setKnobMode(KnobMode::FxParam);
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, scnFdNames[i]);
             refreshKnobDisplay();
             return;
         }
@@ -202,6 +210,11 @@ void App::wireCallbacks() {
     controlWin_.onFKey = [this, refreshModifierDisplay](bool pressed) {
         if (pressed == fKeyHeld_) return;
         fKeyHeld_ = pressed;
+        refreshModifierDisplay();
+    };
+    controlWin_.onCKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == cKeyHeld_) return;
+        cKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
     controlWin_.onBKey = [this](bool bypassed) {
@@ -294,12 +307,22 @@ void App::refreshKnobParamNames() {
 void App::refreshKnobDisplay() {
     if (currentScene_ < 0) return;
 
-    // F key mode: show crossfade speed values for even knobs, 0 for odd.
+    // F key mode: show image-load crossfade speed values for even knobs, 0 for odd.
     if (fKeyHeld_) {
         for (int k = 0; k < NUM_KNOBS; ++k) {
             if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
             int slot = k / 2;
             controlWin_.setKnobValue(k, static_cast<int>(crossfadeSpeedNorm_[slot] * 127.0f));
+        }
+        return;
+    }
+
+    // C key mode: show scene-change crossfade speed values for even knobs, 0 for odd.
+    if (cKeyHeld_) {
+        for (int k = 0; k < NUM_KNOBS; ++k) {
+            if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
+            int slot = k / 2;
+            controlWin_.setKnobValue(k, static_cast<int>(sceneCrossfadeSpeedNorm_[slot] * 127.0f));
         }
         return;
     }
@@ -338,14 +361,24 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     // If a modifier key is held, override to its mode
     KnobMode effectiveMod = effectiveMode();
     // Only use MIDI-provided mode when no key is held
-        KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_) ? effectiveMod : mode;
+        KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_) ? effectiveMod : mode;
 
-    // F key intercept: set crossfade speed for the even knob's slot, don't store in scene.
+    // F key intercept: set image-load crossfade speed for the even knob's slot, don't store in scene.
     if (fKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             crossfadeSpeedNorm_[slot] = normValue;
             compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
+            controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        }
+        return;
+    }
+
+    // C key intercept: set scene-change crossfade speed for the even knob's slot.
+    if (cKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+            int slot = knobIdx / 2;
+            sceneCrossfadeSpeedNorm_[slot] = normValue;
             controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         }
         return;
@@ -393,8 +426,12 @@ void App::onSceneSelect(int sceneIdx) {
     // Load this scene's image files into the 3 source layers
     for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
         const std::string& path = scenes_[sceneIdx].imgPaths[slot];
-        if (!path.empty())
+        if (!path.empty()) {
+            // Capture current frame and set scene-change crossfade speed before loading new image.
+            compositor_.setCrossfadeSpeed(slot, 0.1f + sceneCrossfadeSpeedNorm_[slot] * 7.9f);
+            compositor_.beginCrossfade(slot);
             layers_.loadMedia(slot * 2, path);
+        }
     }
     mediaPickerWin_.setSlotPaths(scenes_[sceneIdx].imgPaths);
 
@@ -425,12 +462,22 @@ void App::onSceneSelect(int sceneIdx) {
 void App::onKnobDrag(int knobIdx, float normValue) {
     if (currentScene_ < 0) return;
 
-    // F key intercept: set crossfade speed, don't store in scene.
+    // F key intercept: set image-load crossfade speed, don't store in scene.
     if (fKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             crossfadeSpeedNorm_[slot] = normValue;
             compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
+        }
+        controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        return;
+    }
+
+    // C key intercept: set scene-change crossfade speed, don't store in scene.
+    if (cKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+            int slot = knobIdx / 2;
+            sceneCrossfadeSpeedNorm_[slot] = normValue;
         }
         controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         return;

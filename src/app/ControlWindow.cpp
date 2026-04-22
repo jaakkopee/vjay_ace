@@ -234,6 +234,7 @@ void ControlWindow::update() {
     bool gNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::G);
     bool pNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::P);
     bool fNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F);
+    bool cNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C);
     bool bNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::B);
     if (rNow != rKeyWas_) { rKeyWas_ = rNow; if (onRKey) onRKey(rNow); }
     if (zNow != zKeyWas_) { zKeyWas_ = zNow; if (onZKey) onZKey(zNow); }
@@ -241,6 +242,7 @@ void ControlWindow::update() {
     if (gNow != gKeyWas_) { gKeyWas_ = gNow; if (onGKey) onGKey(gNow); }
     if (pNow != pKeyWas_) { pKeyWas_ = pNow; if (onPKey) onPKey(pNow); }
     if (fNow != fKeyWas_) { fKeyWas_ = fNow; if (onFKey) onFKey(fNow); }
+    if (cNow != cKeyWas_) { cKeyWas_ = cNow; if (onCKey) onCKey(cNow); }
     // B key: toggle bypass on rising edge (key-down event)
     if (bNow && !bKeyWas_) {
         audioBypassed_ = !audioBypassed_;
