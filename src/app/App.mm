@@ -183,7 +183,7 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
             break;
         case KnobMode::FxAudio:
             if (knobIdx < NUM_FX_LAYERS)
-                layers_.setAudioGain(knobIdx * 2 + 1, v * 2.0f);
+                compositor_.setAudioGain(knobIdx, v * 2.0f);  // 0.0–2.0x gain on FX layers 1,3,5
             break;
         case KnobMode::FxParam: {
             int slot = knobIdx / 2, param = knobIdx % 2;

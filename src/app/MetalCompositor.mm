@@ -188,6 +188,11 @@ void MetalCompositor::setAudioBands(const float* bands, int count, float rms) {
     audioRms_ = rms;
 }
 
+void MetalCompositor::setAudioGain(int fxSlot, float gain) {
+    if (fxSlot >= 0 && fxSlot < NUM_FX_LAYERS)
+        audioGain_[fxSlot] = gain;
+}
+
 // ── dispatch helper ───────────────────────────────────────────────────────────
 
 void MetalCompositor::dispatch(id<MTLComputeCommandEncoder> enc,
@@ -323,11 +328,12 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
             break;
     }
 
-    // Inject audio bands into float_params[8..15] and RMS into float_params[7]
-    // Shaders can read params.float_params[8+bandIdx] for audio reactivity.
-    params.float_params[7] = audioRms_;
+    // Inject audio bands into float_params[8..15] and RMS into float_params[7].
+    // Scale by per-FX gain so knobs 0-2 control audio reactivity per FX layer.
+    float gain = audioGain_[fxSlot];
+    params.float_params[7] = audioRms_ * gain;
     for (int b = 0; b < 8; ++b)
-        params.float_params[8 + b] = audioBands_[b];
+        params.float_params[8 + b] = audioBands_[b] * gain;
 
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
     dispatch(enc, pso, src, dst, params);

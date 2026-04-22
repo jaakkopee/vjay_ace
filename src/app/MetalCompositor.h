@@ -55,6 +55,9 @@ public:
     // Bands are packed into float_params[8..15] of every FX ShaderParams dispatch.
     void setAudioBands(const float* bands, int count, float rms);
 
+    // Set per-FX audio gain multiplier (applied to bands+RMS before shader injection).
+    void setAudioGain(int fxSlot, float gain);
+
     // Composite all layers into outputTexture and return a CPU RGBA8 snapshot
     // at WORK_W x WORK_H for blit into the SFML window.
     // Returns false if not initialised.
@@ -119,6 +122,7 @@ private:
     // Audio bands (8 bands + RMS) passed to FX kernels each frame
     std::array<float, 8> audioBands_ = {};
     float audioRms_ = 0.0f;
+    std::array<float, NUM_FX_LAYERS> audioGain_ = {1.0f, 1.0f, 1.0f};
 
     id<MTLTexture> makeTexture(int w, int h, bool halfRes = false);
     id<MTLComputePipelineState> makePSO(NSString* kernelName);

@@ -91,7 +91,8 @@ kernel void box_blur(
 {
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
-    int ks = max(1, params.int_params[0]);
+    // audio: bass pumps blur radius
+    int ks = max(1, params.int_params[0] + int(params.float_params[9] * 8.0f));
     int hks = ks / 2;
     float weight = 1.0f / float(ks * ks);
     float4 sum = 0;
@@ -111,7 +112,8 @@ kernel void chromatic_aberration(
 {
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
-    int off = params.int_params[0];
+    // audio: bass drives chromatic offset
+    int off = params.int_params[0] + int(params.float_params[9] * 15.0f);
     float r = input.read(uint2(clamp(int(gid.x)-off,0,w-1), gid.y)).r;
     float g = input.read(gid).g;
     float b = input.read(uint2(clamp(int(gid.x)+off,0,w-1), gid.y)).b;
@@ -130,7 +132,8 @@ kernel void hue_cycle(
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
     float4 pixel = input.read(gid);
     float pos = (float(gid.x)/float(w) + float(gid.y)/float(h)) * 0.5f;
-    float shift = (params.float_params[1] + pos) * params.float_params[0] * 360.0f;
+    // audio: RMS adds rotation speed
+    float shift = (params.float_params[1] + pos) * (params.float_params[0] + params.float_params[7] * 2.0f) * 360.0f;
     float3 hsv = rgb_to_hsv(pixel.rgb);
     hsv.x = fmod(hsv.x + shift + 360.0f, 360.0f);
     output.write(clamp(float4(hsv_to_rgb(hsv), pixel.a), 0.0f, 1.0f), gid);
@@ -147,8 +150,9 @@ kernel void video_glitch(
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
     float time = params.float_params[0];
-    float dstr = params.float_params[1];
-    float istr = params.float_params[2];
+    // audio: bass drives displacement, mid drives interference
+    float dstr = params.float_params[1] + params.float_params[9] * 0.6f;
+    float istr = params.float_params[2] + params.float_params[11] * 0.4f;
     float csh  = params.float_params[3];
     float2 uv  = float2(gid) / float2(w, h);
     float noise = max(0.0f, snoise(float2(time*2.0f, uv.y*0.3f)) - 0.3f) * (1.0f/0.7f);
@@ -178,7 +182,8 @@ kernel void kaleidoscope(
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
     int segs = max(2, params.int_params[0]);
-    float rot = params.float_params[0];
+    // audio: RMS adds rotation
+    float rot = params.float_params[0] + params.float_params[7] * 0.4f;
     float2 uv = float2(gid) / float2(w, h) - 0.5f;
     float angle = atan2(uv.y, uv.x) + rot;
     float radius = length(uv);
@@ -201,7 +206,8 @@ kernel void wave_distort(
 {
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
-    float amp  = params.float_params[0];
+    // audio: bass adds wave amplitude
+    float amp  = params.float_params[0] + params.float_params[9] * 25.0f;
     float freq = params.float_params[1];
     float phase= params.float_params[2];
     float2 uv  = float2(gid) / float2(w, h);
@@ -233,7 +239,8 @@ kernel void edge_ink(
             gx += lum * sobelX[ky+1][kx+1];
             gy += lum * sobelY[ky+1][kx+1];
         }
-    float mag   = sqrt(gx*gx + gy*gy) * params.float_params[1];
+    // audio: RMS boosts edge strength
+    float mag   = sqrt(gx*gx + gy*gy) * (params.float_params[1] + params.float_params[7] * 2.0f);
     float thresh = params.float_params[0];
     float4 orig  = input.read(gid);
     // Overlay ink on bright edges
@@ -271,7 +278,8 @@ kernel void pixelate(
 {
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
-    int bs = max(1, params.int_params[0]);
+    // audio: loud signal → bigger pixel blocks
+    int bs = max(1, params.int_params[0] + int(params.float_params[7] * 16.0f));
     uint2 block = uint2((gid.x / bs) * bs, (gid.y / bs) * bs);
     block = clamp(block, uint2(0), uint2(w-1, h-1));
     output.write(input.read(block), gid);
@@ -290,7 +298,8 @@ kernel void rainbow_shift(
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
     float4 pixel  = input.read(gid);
-    float  speed  = params.float_params[0];
+    // audio: RMS accelerates rainbow cycling
+    float  speed  = params.float_params[0] + params.float_params[7] * 3.0f;
     float  wscale = params.float_params[1];
     float  t      = params.float_params[2]; // elapsed time
     float  phase  = (float(gid.x) / float(w) + float(gid.y) / float(h)) * wscale
@@ -319,7 +328,8 @@ kernel void julia_fractal(
     float t    = params.float_params[3];
     float cx   = params.float_params[0] * cos(t * 0.4f) - params.float_params[1] * sin(t * 0.4f);
     float cy   = params.float_params[0] * sin(t * 0.4f) + params.float_params[1] * cos(t * 0.4f);
-    float blend = params.float_params[2];
+    // audio: RMS blends in more fractal overlay
+    float blend = clamp(params.float_params[2] + params.float_params[7] * 0.5f, 0.0f, 1.0f);
 
     float2 uv = (float2(gid) / float2(w, h) - 0.5f) * 3.5f;
     float zx = uv.x, zy = uv.y;
@@ -353,7 +363,8 @@ kernel void mold_trails(
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
 
     float sa    = params.float_params[0]; // sensor angle
-    float decay = clamp(params.float_params[1], 0.0f, 0.9999f);
+    // audio: bass slows trail decay (trails persist longer on beats)
+    float decay = clamp(params.float_params[1] + params.float_params[9] * 0.08f, 0.0f, 0.9999f);
     float speed = 2.0f;
 
     // Current heading (derived from a hash of position for deterministic spread)
@@ -424,9 +435,10 @@ kernel void feedback_zoom(
     uint w = input.get_width(), h = input.get_height();
     if (gid.x >= w || gid.y >= h) return;
 
-    float zoom  = params.float_params[0];
+    // audio: bass pumps zoom, RMS increases feedback mix
+    float zoom  = params.float_params[0] + params.float_params[9] * 0.08f;
     float rot   = params.float_params[1];
-    float mix_  = params.float_params[2];
+    float mix_  = clamp(params.float_params[2] + params.float_params[7] * 0.25f, 0.0f, 0.98f);
     float hue   = params.float_params[3];
 
     float cx = float(w) * 0.5f, cy = float(h) * 0.5f;
@@ -464,7 +476,8 @@ kernel void circle_quilt(
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
 
     int cols  = max(4, params.int_params[0]);
-    float rs  = params.float_params[0];
+    // audio: RMS expands circle radii
+    float rs  = clamp(params.float_params[0] + params.float_params[7] * 0.8f, 0.0f, 1.0f);
     float hoff= params.float_params[1];
 
     // Cell this pixel belongs to
@@ -512,7 +525,8 @@ kernel void ca_glow(
 
     float thresh = params.float_params[0];
     int   spread = max(1, min(5, int(params.float_params[1] * 5.0f + 1.0f)));
-    float hbase  = params.float_params[2];
+    // audio: loud signal shifts glow hue
+    float hbase  = params.float_params[2] + params.float_params[7] * 120.0f;
 
     // Count live neighbours in spread radius
     float live = 0.0f, total = 0.0f;
@@ -551,7 +565,8 @@ kernel void bitplane_reactor(
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
 
-    int   rule   = params.int_params[0] & 0xFF;
+    // audio: bass shifts Wolfram rule number
+    int   rule   = (params.int_params[0] + int(params.float_params[9] * 64.0f)) & 0xFF;
     float thresh = params.float_params[0];
     float chue   = params.float_params[1];
 
