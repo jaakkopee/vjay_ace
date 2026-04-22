@@ -361,16 +361,22 @@ kernel void mold_trails(
     float heading = rng;
 
     // Sample three sensors (forward, left, right)
-    auto sample = [&](float angle) -> float {
-        float sx = float(gid.x) + cos(heading + angle) * speed * 5.0f;
-        float sy = float(gid.y) + sin(heading + angle) * speed * 5.0f;
-        uint2 sc = uint2(clamp(int(sx),0,w-1), clamp(int(sy),0,h-1));
-        return input.read(sc).r;
-    };
-
-    float fwd   = sample(0.0f);
-    float left  = sample( sa);
-    float right = sample(-sa);
+    float fwd, left, right;
+    {
+        float sx = float(gid.x) + cos(heading) * speed * 5.0f;
+        float sy = float(gid.y) + sin(heading) * speed * 5.0f;
+        fwd = input.read(uint2(clamp(int(sx),0,w-1), clamp(int(sy),0,h-1))).r;
+    }
+    {
+        float sx = float(gid.x) + cos(heading + sa) * speed * 5.0f;
+        float sy = float(gid.y) + sin(heading + sa) * speed * 5.0f;
+        left = input.read(uint2(clamp(int(sx),0,w-1), clamp(int(sy),0,h-1))).r;
+    }
+    {
+        float sx = float(gid.x) + cos(heading - sa) * speed * 5.0f;
+        float sy = float(gid.y) + sin(heading - sa) * speed * 5.0f;
+        right = input.read(uint2(clamp(int(sx),0,w-1), clamp(int(sy),0,h-1))).r;
+    }
 
     // Steer towards highest concentration
     float deposit = 1.0f;
@@ -551,13 +557,19 @@ kernel void bitplane_reactor(
 
     // Read three cells from the row above (wrapping)
     int prevY = int(gid.y) > 0 ? int(gid.y) - 1 : h - 1;
-    auto lum = [&](int x, int y) -> int {
-        float4 p = input.read(uint2(clamp(x,0,w-1), y));
-        return (dot(p.rgb, float3(0.299f,0.587f,0.114f)) > thresh) ? 1 : 0;
-    };
-    int left   = lum(int(gid.x) - 1, prevY);
-    int centre = lum(int(gid.x),     prevY);
-    int right  = lum(int(gid.x) + 1, prevY);
+    int left, centre, right;
+    {
+        float4 p = input.read(uint2(clamp(int(gid.x)-1, 0, w-1), prevY));
+        left = (dot(p.rgb, float3(0.299f,0.587f,0.114f)) > thresh) ? 1 : 0;
+    }
+    {
+        float4 p = input.read(uint2(clamp(int(gid.x),   0, w-1), prevY));
+        centre = (dot(p.rgb, float3(0.299f,0.587f,0.114f)) > thresh) ? 1 : 0;
+    }
+    {
+        float4 p = input.read(uint2(clamp(int(gid.x)+1, 0, w-1), prevY));
+        right = (dot(p.rgb, float3(0.299f,0.587f,0.114f)) > thresh) ? 1 : 0;
+    }
     int pattern = (left << 2) | (centre << 1) | right;
     int alive   = (rule >> pattern) & 1;
 

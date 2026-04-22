@@ -1,6 +1,8 @@
 file(REMOVE_RECURSE
   "CMakeFiles/vjay_ace.dir/src/app/App.mm.o"
   "CMakeFiles/vjay_ace.dir/src/app/App.mm.o.d"
+  "CMakeFiles/vjay_ace.dir/src/app/AudioAnalyzer.mm.o"
+  "CMakeFiles/vjay_ace.dir/src/app/AudioAnalyzer.mm.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o"
   "CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o"

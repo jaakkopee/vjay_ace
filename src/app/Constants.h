@@ -153,7 +153,7 @@ inline const char* fxParamName(FxPatchId id, int paramIdx) {
 // ── KnobMode ────────────────────────────────────────────────────────────────
 enum class KnobMode {
     LayerLevel,   // C2  held: knobs 0-5 → layer opacities (layers 1-6)
-    FxAudio,      // C#2 held: knobs 0-2 → FX audio gain; knobs 3-5 → FX bandpass freq
+    FxAudio,      // C#2 held: knobs 0-5 → per-FX audio gain
     FxParam,      // default: knobs control active FX patch params 1 & 2 per FX layer
     ImgRotate,    // R key held: knobs 0-2 → rotation (0–2π) for layers 0, 2, 4
     ImgZoom,      // Z key held: knobs 0-2 → zoom factor for layers 0, 2, 4
@@ -169,7 +169,6 @@ struct LayerState {
     FxPatchId   fxPatch  = FxPatchId::None;
     float       fxParam[FX_PARAM_COUNT] = {0.5f, 0.5f};
     float       audioGain     = 1.0f;
-    float       bandpassFreqHz = 1000.0f; // centre frequency of audio bandpass
 
     // Shared
     int         lastCC[6] = {};  // last CC values received for this layer's 6 knobs

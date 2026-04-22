@@ -62,6 +62,12 @@ public:
     // Fired when the Z key is pressed (true) or released (false)
     std::function<void(bool pressed)> onZKey;
 
+    // Fired when the B key is toggled (true = bypassed, false = active)
+    std::function<void(bool bypassed)> onBKey;
+
+    // Update audio level meter (8 bands 0-1, rms 0-1). Called each frame.
+    void setAudioBands(const float* bands, int count, float rms);
+
 private:
     sf::RenderWindow window_;
     tgui::Gui        gui_;
@@ -91,9 +97,17 @@ private:
     // Key polling state (previous frame)
     bool rKeyWas_ = false;
     bool zKeyWas_ = false;
+    bool bKeyWas_ = false;
+    bool audioBypassed_ = false;
+
+    // Audio bands for meter drawing (8 bands + RMS)
+    std::array<float, 8> audioBands_ = {};
+    float audioRms_ = 0.0f;
+    tgui::CanvasSFML::Ptr audioMeterCanvas_;
 
     void buildGui(int width, int height);
     void drawKnob(int knobIdx);
+    void drawAudioMeter();
     void onMousePressed(float x, float y);
     void onMouseReleased();
     void onMouseMoved(float x, float y);

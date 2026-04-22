@@ -81,4 +81,5 @@ set(CMAKE_MAKEFILE_PRODUCTS
 set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/midi_monitor.dir/DependInfo.cmake"
   "CMakeFiles/vjay_ace.dir/DependInfo.cmake"
+  "CMakeFiles/copy_metal_shader.dir/DependInfo.cmake"
   )

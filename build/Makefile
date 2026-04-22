@@ -142,6 +142,19 @@ vjay_ace/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/build
 .PHONY : vjay_ace/fast
 
+#=============================================================================
+# Target rules for targets named copy_metal_shader
+
+# Build rule for target.
+copy_metal_shader: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 copy_metal_shader
+.PHONY : copy_metal_shader
+
+# fast build rule for target.
+copy_metal_shader/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/copy_metal_shader.dir/build.make CMakeFiles/copy_metal_shader.dir/build
+.PHONY : copy_metal_shader/fast
+
 src/app/App.o: src/app/App.mm.o
 .PHONY : src/app/App.o
 
@@ -149,6 +162,14 @@ src/app/App.o: src/app/App.mm.o
 src/app/App.mm.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/App.mm.o
 .PHONY : src/app/App.mm.o
+
+src/app/AudioAnalyzer.o: src/app/AudioAnalyzer.mm.o
+.PHONY : src/app/AudioAnalyzer.o
+
+# target to build an object file
+src/app/AudioAnalyzer.mm.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/AudioAnalyzer.mm.o
+.PHONY : src/app/AudioAnalyzer.mm.o
 
 src/app/ControlWindow.o: src/app/ControlWindow.cpp.o
 .PHONY : src/app/ControlWindow.o
@@ -374,9 +395,11 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... copy_metal_shader"
 	@echo "... midi_monitor"
 	@echo "... vjay_ace"
 	@echo "... src/app/App.o"
+	@echo "... src/app/AudioAnalyzer.o"
 	@echo "... src/app/ControlWindow.o"
 	@echo "... src/app/ControlWindow.i"
 	@echo "... src/app/ControlWindow.s"

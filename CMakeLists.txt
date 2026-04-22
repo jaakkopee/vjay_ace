@@ -45,6 +45,11 @@ set(VJAY_LINK_LIBS
     "-framework AppKit"
     "-framework CoreVideo"
     "-framework CoreMedia"
+    "-framework AudioUnit"
+    "-framework AudioToolbox"
+    "-framework CoreAudio"
+    "-framework AVFoundation"
+    "-framework Accelerate"
 )
 
 set(VJAY_INCLUDE_DIRS
@@ -76,6 +81,7 @@ target_compile_options(midi_monitor PRIVATE ${RTMIDI_CFLAGS_OTHER})
 add_executable(vjay_ace
     src/app/main.mm
     src/app/App.mm
+    src/app/AudioAnalyzer.mm
     src/app/MidiRouter.cpp
     src/app/LayerManager.cpp
     src/app/VideoDecoder.cpp
@@ -98,10 +104,14 @@ target_compile_options(vjay_ace PRIVATE
     -fobjc-arc
 )
 
-# Copy Metal shader next to the executable so it can be found at runtime
-add_custom_command(TARGET vjay_ace POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_SOURCE_DIR}/src/app/shaders/vjay_shaders.metal
-        $<TARGET_FILE_DIR:vjay_ace>/vjay_shaders.metal
+# Copy Metal shader next to the executable whenever it changes
+set(METAL_SRC ${CMAKE_SOURCE_DIR}/src/app/shaders/vjay_shaders.metal)
+set(METAL_DST ${CMAKE_BINARY_DIR}/vjay_shaders.metal)
+add_custom_command(
+    OUTPUT  ${METAL_DST}
+    COMMAND ${CMAKE_COMMAND} -E copy ${METAL_SRC} ${METAL_DST}
+    DEPENDS ${METAL_SRC}
     COMMENT "Copying vjay_shaders.metal to build dir"
 )
+add_custom_target(copy_metal_shader ALL DEPENDS ${METAL_DST})
+add_dependencies(vjay_ace copy_metal_shader)

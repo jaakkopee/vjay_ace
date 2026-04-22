@@ -6,6 +6,7 @@
 #include "ControlWindow.h"
 #include "PerformanceWindow.h"
 #include "MediaPickerWindow.h"
+#include "AudioAnalyzer.h"
 #include <vector>
 #include <memory>
 
@@ -16,7 +17,6 @@ struct FxPatch {
     FxPatchId id    = FxPatchId::None;
     float     p[2]  = {0.5f, 0.5f}; // param 0 and param 1
     float     audioGain     = 1.0f;
-    float     bandpassHz    = 1000.0f;
 };
 
 // ── SceneState ───────────────────────────────────────────────────────────────
@@ -58,6 +58,7 @@ private:
     LayerManager      layers_;
     MidiRouter        midi_;
     MetalCompositor   compositor_;
+    AudioAnalyzer     audio_;
     ControlWindow     controlWin_;
     PerformanceWindow perfWin_;
     MediaPickerWindow mediaPickerWin_;
@@ -69,6 +70,7 @@ private:
     KnobMode knobMode_  = KnobMode::FxParam;
     bool     rKeyHeld_  = false;  // R held → ImgRotate overrides knobMode_
     bool     zKeyHeld_  = false;  // Z held → ImgZoom overrides knobMode_
+    bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
     // Returns the effective mode considering modifier keys.
     KnobMode effectiveMode() const {

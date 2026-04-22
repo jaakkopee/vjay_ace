@@ -37,7 +37,6 @@ public:
     void setFxPatch(int fxIdx, FxPatchId p)      { states_[fxIdx].fxPatch = p; }
     void setFxParam(int fxIdx, int slot, float v){ states_[fxIdx].fxParam[slot] = v; }
     void setAudioGain(int fxIdx, float v)        { states_[fxIdx].audioGain = v; }
-    void setBandpass(int fxIdx, float hz)        { states_[fxIdx].bandpassFreqHz = hz; }
 
 private:
     std::array<LayerState, NUM_LAYERS> states_;

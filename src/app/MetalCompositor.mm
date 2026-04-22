@@ -182,6 +182,12 @@ void MetalCompositor::setLayerZoom(int srcSlot, float factor) {
     zooms_[srcSlot] = (factor > 0.001f) ? factor : 0.001f;
 }
 
+void MetalCompositor::setAudioBands(const float* bands, int count, float rms) {
+    int n = std::min(count, static_cast<int>(audioBands_.size()));
+    for (int i = 0; i < n; ++i) audioBands_[i] = bands[i];
+    audioRms_ = rms;
+}
+
 // ── dispatch helper ───────────────────────────────────────────────────────────
 
 void MetalCompositor::dispatch(id<MTLComputeCommandEncoder> enc,
@@ -317,10 +323,17 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
             break;
     }
 
+    // Inject audio bands into float_params[8..15] and RMS into float_params[7]
+    // Shaders can read params.float_params[8+bandIdx] for audio reactivity.
+    params.float_params[7] = audioRms_;
+    for (int b = 0; b < 8; ++b)
+        params.float_params[8 + b] = audioBands_[b];
+
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
     dispatch(enc, pso, src, dst, params);
     [enc endEncoding];
 }
+
 
 // ── final composite ────────────────────────────────────────────────────────────
 

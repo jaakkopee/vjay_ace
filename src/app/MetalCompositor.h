@@ -51,6 +51,10 @@ public:
     // Set zoom factor for a source layer slot (1.0 = no zoom; >1 = zoom in; <1 = zoom out).
     void setLayerZoom(int srcSlot, float factor);
 
+    // Set audio band magnitudes (0.0-1.0 each).  Call each frame from the main thread.
+    // Bands are packed into float_params[8..15] of every FX ShaderParams dispatch.
+    void setAudioBands(const float* bands, int count, float rms);
+
     // Composite all layers into outputTexture and return a CPU RGBA8 snapshot
     // at WORK_W x WORK_H for blit into the SFML window.
     // Returns false if not initialised.
@@ -111,6 +115,10 @@ private:
     std::array<FxPatchId, NUM_FX_LAYERS>   patches_  = {};
     std::array<std::array<float,2>, NUM_FX_LAYERS> fxParams_ = {};
     float frameTime_ = 0.0f; // seconds since start, for animated FX
+
+    // Audio bands (8 bands + RMS) passed to FX kernels each frame
+    std::array<float, 8> audioBands_ = {};
+    float audioRms_ = 0.0f;
 
     id<MTLTexture> makeTexture(int w, int h, bool halfRes = false);
     id<MTLComputePipelineState> makePSO(NSString* kernelName);

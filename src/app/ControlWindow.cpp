@@ -78,6 +78,22 @@ void ControlWindow::buildGui(int width, int /*height*/) {
         drawKnob(i);
     }
 
+    // ── Audio level meter canvas ──────────────────────────────────────────────
+    // Placed below the knob grid, spanning the left panel.
+    const int meterY = 96 + KNOB_SIZE + 90 + KNOB_SIZE + 70;  // below row-1 value labels
+    const int meterH = 80;
+
+    auto meterLabel = tgui::Label::create("AUDIO");
+    meterLabel->setPosition(6, meterY - 18);
+    meterLabel->setTextSize(11);
+    meterLabel->getRenderer()->setTextColor(TEXT_DIM);
+    gui_.add(meterLabel);
+
+    audioMeterCanvas_ = tgui::CanvasSFML::create(
+        {static_cast<float>(leftColW_ - 8), static_cast<float>(meterH)});
+    audioMeterCanvas_->setPosition(4, meterY);
+    gui_.add(audioMeterCanvas_);
+
     // ── Right panel: video monitor ─────────────────────────────────────────────
     rightPanel_ = tgui::Panel::create({static_cast<float>(width - leftColW_), "100%"});
     rightPanel_->setPosition(leftColW_, 0);
@@ -214,8 +230,93 @@ void ControlWindow::update() {
     // Poll R and Z key state each frame — robust against TGUI consuming key events.
     bool rNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R);
     bool zNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z);
+    bool bNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::B);
     if (rNow != rKeyWas_) { rKeyWas_ = rNow; if (onRKey) onRKey(rNow); }
     if (zNow != zKeyWas_) { zKeyWas_ = zNow; if (onZKey) onZKey(zNow); }
+    // B key: toggle bypass on rising edge (key-down event)
+    if (bNow && !bKeyWas_) {
+        audioBypassed_ = !audioBypassed_;
+        if (onBKey) onBKey(audioBypassed_);
+    }
+    bKeyWas_ = bNow;
+
+    // Redraw audio meter each frame
+    drawAudioMeter();
+}
+
+void ControlWindow::setAudioBands(const float* bands, int count, float rms) {
+    int n = std::min(count, static_cast<int>(audioBands_.size()));
+    for (int i = 0; i < n; ++i) audioBands_[i] = bands[i];
+    audioRms_ = rms;
+}
+
+void ControlWindow::drawAudioMeter() {
+    if (!audioMeterCanvas_) return;
+    auto& rt = audioMeterCanvas_->getRenderTexture();
+    // Distinct dark background so meter is always visible
+    audioMeterCanvas_->clear(tgui::Color(12, 12, 24));
+
+    const float cw     = static_cast<float>(audioMeterCanvas_->getSize().x);
+    const float ch     = static_cast<float>(audioMeterCanvas_->getSize().y);
+    const int   nBands = static_cast<int>(audioBands_.size()); // 8
+    const float gap    = 3.0f;
+    const float barW   = (cw - gap * (nBands + 1)) / nBands;
+
+    for (int b = 0; b < nBands; ++b) {
+        float x = gap + b * (barW + gap);
+
+        // Empty slot background (always visible)
+        sf::RectangleShape slot({barW, ch - 4.0f});
+        slot.setPosition({x, 2.0f});
+        slot.setFillColor(sf::Color(35, 35, 55));
+        rt.draw(slot);
+
+        float val  = audioBypassed_ ? 0.0f : audioBands_[b];
+        float barH = val * (ch - 4.0f);
+        if (barH < 1.0f) continue;
+
+        // Colour: blue → green → yellow → red
+        uint8_t cr, cg, cb;
+        if (audioBypassed_) {
+            cr = 60; cg = 60; cb = 60;
+        } else if (val < 0.33f) {
+            cr = 0;
+            cg = static_cast<uint8_t>(val / 0.33f * 200.0f);
+            cb = 220;
+        } else if (val < 0.66f) {
+            cr = static_cast<uint8_t>((val - 0.33f) / 0.33f * 255.0f);
+            cg = 200;
+            cb = 0;
+        } else {
+            cr = 255;
+            cg = static_cast<uint8_t>((1.0f - val) * 200.0f);
+            cb = 0;
+        }
+
+        sf::RectangleShape bar({barW, barH});
+        bar.setPosition({x, ch - barH - 2.0f});
+        bar.setFillColor(sf::Color(cr, cg, cb, 230));
+        rt.draw(bar);
+    }
+
+    // RMS peak indicator line
+    if (!audioBypassed_ && audioRms_ > 0.005f) {
+        float peakY = ch - audioRms_ * (ch - 4.0f) - 2.0f;
+        sf::RectangleShape line({cw - 2.0f, 2.0f});
+        line.setPosition({1.0f, peakY});
+        line.setFillColor(sf::Color(255, 255, 255, 180));
+        rt.draw(line);
+    }
+
+    // Bypass: red bar across the top
+    if (audioBypassed_) {
+        sf::RectangleShape tick({cw - 4.0f, 4.0f});
+        tick.setPosition({2.0f, 0.0f});
+        tick.setFillColor(sf::Color(200, 60, 60, 200));
+        rt.draw(tick);
+    }
+
+    audioMeterCanvas_->display();
 }
 
 void ControlWindow::render(const sf::Texture& compositePreview) {

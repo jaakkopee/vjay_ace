@@ -1,0 +1,3 @@
+# Hashes of file build rules.
+8faf8885d8cbf63484d4eb413c605a62 CMakeFiles/copy_metal_shader
+a374e783d29a754ef03e7596d2198df5 vjay_shaders.metal

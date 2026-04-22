@@ -76,6 +76,10 @@ bool App::init() {
         std::cout << "[App] No MIDI ports found\n";
     }
 
+    // ── Audio capture ─────────────────────────────────────────────────
+    if (!audio_.start())
+        std::cerr << "[App] Audio capture unavailable (no mic/line-in?)\n";
+
     // ── Knob pickup state ────────────────────────────────────────────────
     knobLastPhys_.fill(0.5f);
 
@@ -156,6 +160,14 @@ void App::wireCallbacks() {
         zKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
+    controlWin_.onBKey = [this](bool bypassed) {
+        audioBypassed_ = bypassed;
+        // Zero out bands in compositor immediately when bypass toggles on
+        if (bypassed) {
+            const float zeros[8] = {};
+            compositor_.setAudioBands(zeros, 8, 0.0f);
+        }
+    };
     mediaPickerWin_.onFileSelected = [this](int slot, const std::string& path){
         onImageSelected(slot, path);
     };
@@ -172,10 +184,6 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
         case KnobMode::FxAudio:
             if (knobIdx < NUM_FX_LAYERS)
                 layers_.setAudioGain(knobIdx * 2 + 1, v * 2.0f);
-            else {
-                int slot = knobIdx - NUM_FX_LAYERS;
-                layers_.setBandpass(slot * 2 + 1, 100.0f + v * 7900.0f);
-            }
             break;
         case KnobMode::FxParam: {
             int slot = knobIdx / 2, param = knobIdx % 2;
@@ -461,6 +469,18 @@ void App::processFrame() {
     layers_.update(60.0f);
     uploadLayers();
     syncCompositorState();
+
+    // ── Audio poll: read latest bands and push to compositor + meter ─────
+    if (!audioBypassed_ && audio_.isRunning()) {
+        auto bands = audio_.bands();
+        float rms  = audio_.rms();
+        compositor_.setAudioBands(bands.data(), static_cast<int>(bands.size()), rms);
+        controlWin_.setAudioBands(bands.data(), static_cast<int>(bands.size()), rms);
+    } else {
+        const float zeros[8] = {};
+        compositor_.setAudioBands(zeros, 8, 0.0f);
+        controlWin_.setAudioBands(zeros, 8, 0.0f);
+    }
 
     // GPU composite → CPU readback
     if (compositor_.composite(compositePixels_)) {
