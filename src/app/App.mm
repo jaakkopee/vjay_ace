@@ -389,7 +389,9 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     // ── Pickup / catch-up ────────────────────────────────────────────────
     // soft == -1.0f → first touch in this scene: apply immediately.
     // Otherwise the physical pot must sweep through the stored value first.
-    if (soft >= 0.0f) {
+    // Opacity is a performance control; apply immediately without pickup lock.
+    // Other modes keep pickup to avoid value jumps on scene recall.
+    if (eff != KnobMode::LayerLevel && soft >= 0.0f) {
         bool crossed = (prev <= soft && soft <= normValue) ||
                        (normValue <= soft && soft <= prev);
         bool close   = std::abs(normValue - soft) < (3.0f / 127.0f);

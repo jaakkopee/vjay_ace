@@ -169,7 +169,9 @@ void ControlWindow::setSceneName(const std::string& name) {
 }
 
 void ControlWindow::setKnobMode(KnobMode mode) {
-    static const char* names[] = {"Layer Opacity", "Audio Gain", "FX Param", "Img Rotate", "Img Zoom"};
+    static const char* names[] = {
+        "Layer Opacity", "Audio Gain", "FX Param", "Img Rotate", "Img Zoom", "Img Pan"
+    };
     if (modeLabel_)
         modeLabel_->setText(std::string("Mode: ") + names[static_cast<int>(mode)]
                             + "  |  CC: 3  9  12  13  14  15");
