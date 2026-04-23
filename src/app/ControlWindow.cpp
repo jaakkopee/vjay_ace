@@ -97,7 +97,7 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     // ── Right panel: video monitor ─────────────────────────────────────────────
     rightPanel_ = tgui::Panel::create({static_cast<float>(width - leftColW_), "100%"});
     rightPanel_->setPosition(leftColW_, 0);
-    rightPanel_->getRenderer()->setBackgroundColor(tgui::Color(0, 0, 0));
+    rightPanel_->getRenderer()->setBackgroundColor(tgui::Color(0, 0, 0, 0)); // transparent — sprite drawn behind gui_.draw()
     gui_.add(rightPanel_, "rightPanel");
 }
 
