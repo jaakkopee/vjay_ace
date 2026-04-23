@@ -58,7 +58,7 @@ Layer 5  (FX)      ─┴── FX slot 2 processes layer 4 → composited group
 
 ### State model
 
-Each of the 14 scenes stores independent knob values per mode. When a scene is selected, stored values are applied immediately. Physical knobs use a **pickup / catch-up** system — a knob has no effect until its physical position crosses the stored value, preventing value jumps.
+Each of the 16 scenes stores independent knob values per mode. When a scene is selected, stored values are applied immediately. Physical knobs use a **pickup / catch-up** system — a knob has no effect until its physical position crosses the stored value, preventing value jumps.
 
 State is persisted to `~/.vjay_ace_state` on every scene change.
 
@@ -78,20 +78,34 @@ State is persisted to `~/.vjay_ace_state` on every scene change.
 
 ### Knob modes
 
-Hold a mode key to switch all 6 knobs simultaneously. Release to return to FxParam mode.
+Hold a mode key to activate the corresponding knob assignment. Release to return to FxParam mode.
 
-| Key | Mode | Knobs 0–5 control |
+| Key | Mode | Active knobs |
 |---|---|---|
-| O (held) | **Layer Opacity** | Layers 0–5 opacity (0 = invisible, 1 = full) |
-| G (held) | **FX / Audio** | Gain for FX layers 0–2; bandpass frequency 100–8000 Hz |
-| *(default)* | **FX Param** | Two params per FX slot (slot 0: knobs 0–1, slot 1: knobs 2–3, slot 2: knobs 4–5) |
+| O (held) | **Layer Opacity** | Knobs 0, 2, 4 → FX layer (1, 3, 5) opacity (0 = invisible, 1 = full) |
+| G (held) | **FX Audio Gain** | Knobs 0, 2, 4 → per-FX audio gain multiplier (0–2×) for slots 0, 1, 2 |
+| *(default)* | **FX Param** | All 6: two params per FX slot (slot 0: knobs 0–1, slot 1: knobs 2–3, slot 2: knobs 4–5) |
 
 **Modifier keys** (held while in FxParam mode):
 
-| Key | Mode | Knobs 0–2 control |
+| Key | Mode | Active knobs |
 |---|---|---|
-| R | **Image Rotate** | Rotation 0–2π for source layers 0, 2, 4 |
-| Z | **Image Zoom** | Zoom factor 0.5×–2.0× for source layers 0, 2, 4 |
+| R | **Image Rotate** | Knobs 0, 2, 4 → rotation 0–2π for source layers 0, 2, 4 |
+| Z | **Image Zoom** | Knobs 0, 2, 4 → zoom factor 0.5×–2.0× for source layers 0, 2, 4 |
+| P | **Image Pan** | All 6: knobs 0/1, 2/3, 4/5 → X/Y pan (−1.0 to +1.0) for source layers 0, 2, 4 |
+
+**Intercept keys** (held to redirect even knobs without storing to scene):
+
+| Key | Function | Active knobs |
+|---|---|---|
+| F (held) | **Image Crossfade Speed** | Knobs 0, 2, 4 → image-load crossfade duration 0.1–8.0 s for source slots 0, 1, 2 |
+| C (held) | **Scene Crossfade Speed** | Knobs 0, 2, 4 → scene-change crossfade duration 0.1–8.0 s for source slots 0, 1, 2 |
+
+**Toggle key:**
+
+| Key | Function |
+|---|---|
+| B | **Audio Bypass** — toggles audio band injection to Metal kernels on/off |
 
 ### Knob CCs
 
