@@ -79,7 +79,8 @@ enum class FxPatchId : int {
     CircleQuilt    = 15,
     CAGlow         = 16,
     BitplaneReactor= 17,
-    LIFNetwork     = 18,
+    LIFModulate    = 18,
+    LIFReplace     = 19,
     COUNT
 };
 
@@ -103,7 +104,8 @@ inline const char* fxPatchName(FxPatchId id) {
         case FxPatchId::CircleQuilt:    return "Circle Quilt";
         case FxPatchId::CAGlow:         return "CA Glow";
         case FxPatchId::BitplaneReactor:return "Bitplane";
-        case FxPatchId::LIFNetwork:     return "LIF Network";
+        case FxPatchId::LIFModulate:    return "LIF Modulate";
+        case FxPatchId::LIFReplace:     return "LIF Replace";
         default:                        return "???";
     }
 }
@@ -146,8 +148,9 @@ inline const char* fxParamName(FxPatchId id, int paramIdx) {
             return paramIdx == 0 ? "Threshold" : "Glow Spread";
         case FxPatchId::BitplaneReactor:
             return paramIdx == 0 ? "CA Rule" : "Threshold";
-        case FxPatchId::LIFNetwork:
-            return paramIdx == 0 ? "Threshold" : "Topology";
+        case FxPatchId::LIFModulate:
+        case FxPatchId::LIFReplace:
+          return paramIdx == 0 ? "Influence" : "Topology";
         default:
             return paramIdx == 0 ? "P1" : "P2";
     }
@@ -196,8 +199,8 @@ inline constexpr Scene SCENES[NUM_SCENES] = {
 
     // 01  D#2  – kaleidoscope + slow hue rotation
     { "Kaleidoscope",
-      { FxPatchId::Kaleidoscope, FxPatchId::HueCycle, FxPatchId::Passthrough },
-      { {0.5f,0.2f}, {0.2f,0.5f}, {0.5f,0.5f} } },
+      { FxPatchId::Kaleidoscope, FxPatchId::HueCycle, FxPatchId::LIFModulate },
+      { {0.5f,0.2f}, {0.2f,0.5f}, {0.35f,0.0f} } },
 
     // 02  E2   – rainbow colour wash over all layers
     { "Rainbow",
@@ -221,8 +224,8 @@ inline constexpr Scene SCENES[NUM_SCENES] = {
 
     // 06  G#2  – feedback zoom loop (infinite tunnel)
     { "Feedback Tunnel",
-      { FxPatchId::FeedbackZoom, FxPatchId::HueCycle, FxPatchId::Passthrough },
-      { {0.5f,0.3f}, {0.2f,0.5f}, {0.5f,0.5f} } },
+      { FxPatchId::FeedbackZoom, FxPatchId::HueCycle, FxPatchId::LIFReplace },
+      { {0.5f,0.3f}, {0.2f,0.5f}, {0.42f,0.6f} } },
 
     // 07  A2   – circle quilt spectral visualiser
     { "Circle Quilt",
@@ -259,13 +262,13 @@ inline constexpr Scene SCENES[NUM_SCENES] = {
       { FxPatchId::VideoGlitch, FxPatchId::Kaleidoscope, FxPatchId::BitplaneReactor },
       { {0.7f,0.6f}, {0.5f,0.3f}, {0.85f,0.5f} } },
 
-    // 14  E3   – LIF local topology + hue drift
-    { "Neural Glow",
-      { FxPatchId::LIFNetwork, FxPatchId::HueCycle, FxPatchId::Passthrough },
-      { {0.45f,0.2f}, {0.3f,0.5f}, {0.5f,0.5f} } },
+    // 14  E3   – LIF state texture modulates source with hue drift
+    { "Neural Pulse",
+      { FxPatchId::LIFModulate, FxPatchId::HueCycle, FxPatchId::Passthrough },
+      { {0.55f,0.0f}, {0.3f,0.5f}, {0.5f,0.5f} } },
 
-    // 15  F3   – LIF long-range inhibitory topology + wave distort
-    { "Synapse Storm",
-      { FxPatchId::LIFNetwork, FxPatchId::WaveDistort, FxPatchId::LIFNetwork },
-      { {0.35f,0.8f}, {0.4f,0.3f}, {0.5f,0.5f} } },
+    // 15  F3   – LIF state texture replaces source while chaos layers stack above it
+    { "Spike Storm",
+      { FxPatchId::LIFReplace, FxPatchId::Kaleidoscope, FxPatchId::VideoGlitch },
+      { {0.75f,0.8f}, {0.52f,0.18f}, {0.45f,0.35f} } },
 };

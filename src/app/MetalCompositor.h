@@ -1,7 +1,9 @@
 #pragma once
 #include "Constants.h"
+#include "LIFNetwork.h"
 #include <Metal/Metal.h>
 #include <cstdint>
+#include <memory>
 #include <vector>
 #include <string>
 
@@ -63,6 +65,9 @@ public:
     // Set per-FX audio gain multiplier (applied to bands+RMS before shader injection).
     void setAudioGain(int fxSlot, float gain);
 
+    void setLIFTopology(LIFNetwork::Topology topology);
+    void setLIFNeuronCount(int neuronCount);
+
     // Begin a crossfade for a source slot — call BEFORE uploading the new image.
     // Captures the current frame and resets the blend progress to 0.
     void beginCrossfade(int srcSlot);
@@ -117,7 +122,8 @@ private:
     id<MTLComputePipelineState> psoCircleQuilt_  = nil;
     id<MTLComputePipelineState> psoCAGlow_       = nil;
     id<MTLComputePipelineState> psoBitplane_     = nil;
-    id<MTLComputePipelineState> psoLIFNetwork_   = nil;
+    id<MTLComputePipelineState> psoLIFModulate_  = nil;
+    id<MTLComputePipelineState> psoLIFReplace_   = nil;
     id<MTLComputePipelineState> psoCrossfade_    = nil;
 
     // Per-source-slot rotation textures and angles
@@ -138,6 +144,8 @@ private:
     // Per-source-slot crossfade state
     id<MTLTexture>              crossfadeTex_[NUM_SRC_LAYERS]      = {nil, nil, nil};
     id<MTLTexture>              crossfadeBlendTex_[NUM_SRC_LAYERS] = {nil, nil, nil};
+    id<MTLTexture>              feedbackTex_[NUM_FX_LAYERS]        = {nil, nil, nil};
+    bool                        feedbackPrimed_[NUM_FX_LAYERS]     = {false, false, false};
     float                       crossfadeProgress_[NUM_SRC_LAYERS] = {1.0f, 1.0f, 1.0f};
     float                       crossfadeSpeed_[NUM_SRC_LAYERS]    = {1.0f, 1.0f, 1.0f};
     float                       lastFrameTime_ = 0.0f;
@@ -151,6 +159,7 @@ private:
     std::array<float, 8> audioBands_ = {};
     float audioRms_ = 0.0f;
     std::array<float, NUM_FX_LAYERS> audioGain_ = {1.0f, 1.0f, 1.0f};
+    std::unique_ptr<LIFNetwork> lifNetwork_;
 
     id<MTLTexture> makeTexture(int w, int h, bool halfRes = false);
     id<MTLComputePipelineState> makePSO(NSString* kernelName);

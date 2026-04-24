@@ -6,6 +6,23 @@
 #include <cstring>
 #include <chrono>
 
+namespace {
+LIFNetwork::Topology topologyFromParam(float value) {
+    int bucket = std::clamp(static_cast<int>(value * 5.0f), 0, 4);
+    switch (bucket) {
+        case 0: return LIFNetwork::Topology::Ring;
+        case 1: return LIFNetwork::Topology::FullyConnected;
+        case 2: return LIFNetwork::Topology::Feedforward;
+        case 3: return LIFNetwork::Topology::SparseRandom;
+        default: return LIFNetwork::Topology::SmallWorld;
+    }
+}
+
+bool isLIFPatch(FxPatchId patch) {
+    return patch == FxPatchId::LIFModulate || patch == FxPatchId::LIFReplace;
+}
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 static auto s_start = std::chrono::steady_clock::now();
@@ -71,7 +88,8 @@ bool MetalCompositor::init() {
     psoCircleQuilt_  = makePSO(@"circle_quilt");
     psoCAGlow_       = makePSO(@"ca_glow");
     psoBitplane_     = makePSO(@"bitplane_reactor");
-    psoLIFNetwork_   = makePSO(@"lif_network");
+    psoLIFModulate_  = makePSO(@"lif_modulate");
+    psoLIFReplace_   = makePSO(@"lif_replace");
     psoPan_          = makePSO(@"pan_source");
     psoCrossfade_    = makePSO(@"crossfade_blend");
 
@@ -90,12 +108,17 @@ bool MetalCompositor::init() {
         panTex_[s]    = makeTexture(WORK_W, WORK_H);
         crossfadeTex_[s]      = makeTexture(WORK_W, WORK_H);
         crossfadeBlendTex_[s] = makeTexture(WORK_W, WORK_H);
+        feedbackTex_[s]       = makeTexture(WORK_W, WORK_H);
     }
 
     // CPU-readable buffer for readback (RGBA8, 4 bytes/pixel)
     NSUInteger readbackSize = WORK_W * WORK_H * 4;
     readbackBuf_ = [device_ newBufferWithLength:readbackSize
                                         options:MTLResourceStorageModeShared];
+
+    lifNetwork_ = std::make_unique<LIFNetwork>();
+    if (!lifNetwork_->init(device_, cmdQueue_, library_, LIFNetwork::Topology::Ring, 1024))
+        lifNetwork_.reset();
     return true;
 }
 
@@ -207,6 +230,16 @@ void MetalCompositor::setAudioBands(const float* bands, int count, float rms) {
 void MetalCompositor::setAudioGain(int fxSlot, float gain) {
     if (fxSlot >= 0 && fxSlot < NUM_FX_LAYERS)
         audioGain_[fxSlot] = gain;
+}
+
+void MetalCompositor::setLIFTopology(LIFNetwork::Topology topology) {
+    if (lifNetwork_)
+        lifNetwork_->setTopology(topology);
+}
+
+void MetalCompositor::setLIFNeuronCount(int neuronCount) {
+    if (lifNetwork_)
+        lifNetwork_->setNeuronCount(neuronCount);
 }
 
 void MetalCompositor::beginCrossfade(int srcSlot) {
@@ -329,9 +362,9 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
             break;
         case FxPatchId::FeedbackZoom:
             pso = psoFeedback_;
-            params.float_params[0] = 1.0f + p0 * 0.05f; // zoom delta 1.0-1.05
-            params.float_params[1] = p1 * 0.05f;         // rotate delta
-            params.float_params[2] = 0.85f;              // feedback mix
+            params.float_params[0] = 1.0f + p0 * 0.45f; // zoom delta 1.0-1.45
+            params.float_params[1] = p1 * 0.35f;         // rotate delta 0-0.35 rad
+            params.float_params[2] = 0.94f;              // feedback mix
             params.float_params[3] = 30.0f;              // tint hue offset
             break;
         case FxPatchId::CircleQuilt:
@@ -363,14 +396,17 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
         case FxPatchId::MoldTrails:
             pso = psoPassthrough_; // mold_trails kernel needs state — use passthrough for now
             break;
-        case FxPatchId::LIFNetwork:
-            pso = psoLIFNetwork_;
-            // Map knobs to a more sensitive operating band.
-            // threshold: 0.12..0.72 (avoids dead extremes)
-            // topology:  non-linear curve to make low/mid changes more visible
-            params.float_params[0] = 0.12f + p0 * 0.60f;
-            params.float_params[1] = std::pow(p1, 0.65f);
-            params.float_params[2] = t;               // time (animated noise)
+        case FxPatchId::LIFModulate:
+            pso = psoLIFModulate_;
+            params.float_params[0] = 0.15f + p0 * 0.85f;
+            params.float_params[1] = p1;
+            params.float_params[2] = t;
+            break;
+        case FxPatchId::LIFReplace:
+            pso = psoLIFReplace_;
+            params.float_params[0] = 0.25f + p0 * 0.75f;
+            params.float_params[1] = p1;
+            params.float_params[2] = t;
             break;
     }
 
@@ -382,8 +418,44 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
         params.float_params[8 + b] = audioBands_[b] * gain;
 
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-    dispatch(enc, pso, src, dst, params);
+    if (patch == FxPatchId::FeedbackZoom && feedbackTex_[fxSlot]) {
+        id<MTLTexture> feedbackInput = feedbackPrimed_[fxSlot] ? feedbackTex_[fxSlot] : src;
+        [enc setComputePipelineState:pso];
+        [enc setTexture:src atIndex:0];
+        [enc setTexture:dst atIndex:1];
+        [enc setTexture:feedbackInput atIndex:2];
+        [enc setBytes:&params length:sizeof(params) atIndex:0];
+        MTLSize threads = {pso.threadExecutionWidth, 8, 1};
+        MTLSize groups = {(WORK_W + threads.width - 1) / threads.width,
+                          (WORK_H + threads.height - 1) / threads.height,
+                          1};
+        [enc dispatchThreadgroups:groups threadsPerThreadgroup:threads];
+    } else if (isLIFPatch(patch) && lifNetwork_ && lifNetwork_->stateTexture()) {
+        [enc setComputePipelineState:pso];
+        [enc setTexture:src atIndex:0];
+        [enc setTexture:dst atIndex:1];
+        [enc setTexture:lifNetwork_->stateTexture() atIndex:2];
+        [enc setBytes:&params length:sizeof(params) atIndex:0];
+        MTLSize threads = {pso.threadExecutionWidth, 8, 1};
+        MTLSize groups = {(WORK_W + threads.width - 1) / threads.width,
+                          (WORK_H + threads.height - 1) / threads.height,
+                          1};
+        [enc dispatchThreadgroups:groups threadsPerThreadgroup:threads];
+    } else {
+        dispatch(enc, pso, src, dst, params);
+    }
     [enc endEncoding];
+
+    if (patch == FxPatchId::FeedbackZoom && feedbackTex_[fxSlot]) {
+        id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
+        [blit copyFromTexture:dst sourceSlice:0 sourceLevel:0
+                 sourceOrigin:MTLOriginMake(0, 0, 0)
+                   sourceSize:MTLSizeMake(WORK_W, WORK_H, 1)
+                   toTexture:feedbackTex_[fxSlot] destinationSlice:0 destinationLevel:0
+          destinationOrigin:MTLOriginMake(0, 0, 0)];
+        [blit endEncoding];
+        feedbackPrimed_[fxSlot] = true;
+    }
 }
 
 
@@ -445,6 +517,16 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
     frameTime_     = now;
 
     id<MTLCommandBuffer> cmd = [cmdQueue_ commandBuffer];
+
+    if (lifNetwork_) {
+        for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+            if (isLIFPatch(patches_[slot])) {
+                setLIFTopology(topologyFromParam(fxParams_[slot][1]));
+                break;
+            }
+        }
+        lifNetwork_->step(cmd, layerTex_[0], audioBands_, audioRms_, dt, now);
+    }
 
     // For each FX slot (0=layer1, 1=layer3, 2=layer5):
     //   1. Rotate the source layer into rotateTex_[slot]

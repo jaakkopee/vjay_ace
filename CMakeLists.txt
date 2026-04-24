@@ -82,6 +82,7 @@ add_executable(vjay_ace
     src/app/main.mm
     src/app/App.mm
     src/app/AudioAnalyzer.mm
+    src/app/LIFNetwork.mm
     src/app/MidiRouter.cpp
     src/app/LayerManager.cpp
     src/app/VideoDecoder.cpp

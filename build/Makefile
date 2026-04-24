@@ -219,6 +219,14 @@ src/app/FxPatch.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.s
 .PHONY : src/app/FxPatch.cpp.s
 
+src/app/LIFNetwork.o: src/app/LIFNetwork.mm.o
+.PHONY : src/app/LIFNetwork.o
+
+# target to build an object file
+src/app/LIFNetwork.mm.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LIFNetwork.mm.o
+.PHONY : src/app/LIFNetwork.mm.o
+
 src/app/LayerManager.o: src/app/LayerManager.cpp.o
 .PHONY : src/app/LayerManager.o
 
@@ -406,6 +414,7 @@ help:
 	@echo "... src/app/FxPatch.o"
 	@echo "... src/app/FxPatch.i"
 	@echo "... src/app/FxPatch.s"
+	@echo "... src/app/LIFNetwork.o"
 	@echo "... src/app/LayerManager.o"
 	@echo "... src/app/LayerManager.i"
 	@echo "... src/app/LayerManager.s"

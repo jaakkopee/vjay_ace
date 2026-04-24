@@ -13,6 +13,18 @@ struct Params {
     float float_params[16];
 };
 
+struct LIFSimParams {
+    uint  neuronCount;
+    uint  gridSize;
+    float dt;
+    float leak;
+    float threshold;
+    float reset;
+    float refractory;
+    float rms;
+    float timeSeconds;
+};
+
 // ── Utility: RGB ↔ HSV ────────────────────────────────────────────────────────
 float3 rgb_to_hsv(float3 rgb) {
     float cmax = max(max(rgb.r, rgb.g), rgb.b);
@@ -427,8 +439,9 @@ kernel void mold_trails(
 // float_params[2] = feedback_mix (0=source only, 1=full feedback)
 // float_params[3] = tint_hue     (0-360)
 kernel void feedback_zoom(
-    texture2d<float, access::sample> input  [[texture(0)]],
+    texture2d<float, access::read>   input  [[texture(0)]],
     texture2d<float, access::write>  output [[texture(1)]],
+    texture2d<float, access::sample> feedbackTex [[texture(2)]],
     constant Params& params [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -449,7 +462,7 @@ kernel void feedback_zoom(
     float srcY = (-sinR * dx + cosR * dy) / zoom + cy;
 
     constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
-    float4 feedback = input.sample(s, float2(srcX / float(w), srcY / float(h)));
+    float4 feedback = feedbackTex.sample(s, float2(srcX / float(w), srcY / float(h)));
 
     // Colour tint the feedback
     float3 hsv = rgb_to_hsv(feedback.rgb);
@@ -822,4 +835,127 @@ kernel void lif_network(
     }
 
     output.write(float4(clamp(result, 0.0f, 1.0f), src.a), gid);
+}
+
+kernel void lif_step(
+    texture2d<float, access::sample> source [[texture(0)]],
+    device const float4* prevState [[buffer(0)]],
+    device float4* nextState [[buffer(1)]],
+    device const float* weights [[buffer(2)]],
+    device const float* inputCurrents [[buffer(3)]],
+    constant LIFSimParams& sim [[buffer(4)]],
+    uint neuronIdx [[thread_position_in_grid]])
+{
+    if (neuronIdx >= sim.neuronCount) return;
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
+
+    uint gx = neuronIdx % sim.gridSize;
+    uint gy = neuronIdx / sim.gridSize;
+    float2 uv = float2((float(gx) + 0.5f) / float(sim.gridSize),
+                       (float(gy) + 0.5f) / float(sim.gridSize));
+
+    float3 src = source.sample(s, uv).rgb;
+    float luminance = dot(src, float3(0.299f, 0.587f, 0.114f));
+    float noise = snoise(float2(uv.x * 11.0f + sim.timeSeconds * 0.17f,
+                                uv.y * 13.0f - sim.timeSeconds * 0.11f)) * 0.04f;
+
+    float4 prev = prevState[neuronIdx];
+    float membrane = prev.x;
+    float refractoryLeft = max(prev.z - sim.dt, 0.0f);
+    float lastSpikeTime = prev.w;
+
+    float synaptic = 0.0f;
+    const device float* row = weights + neuronIdx * sim.neuronCount;
+    for (uint j = 0; j < sim.neuronCount; ++j)
+        synaptic += row[j] * prevState[j].y;
+
+    float threshold = max(0.12f, sim.threshold - sim.rms * 0.12f);
+    float drive = inputCurrents[neuronIdx] + luminance * (0.25f + sim.rms * 0.75f) + noise;
+    float spike = 0.0f;
+
+    if (refractoryLeft <= 0.0f) {
+        membrane = membrane * (1.0f - sim.leak * sim.dt) + (drive + synaptic) * sim.dt;
+        membrane = clamp(membrane, 0.0f, 2.0f);
+        if (membrane >= threshold) {
+            spike = 1.0f;
+            membrane = sim.reset;
+            refractoryLeft = sim.refractory;
+            lastSpikeTime = sim.timeSeconds;
+        }
+    } else {
+        membrane = max(sim.reset, membrane - sim.leak * sim.dt * 0.5f);
+    }
+
+    nextState[neuronIdx] = float4(membrane, spike, refractoryLeft, lastSpikeTime);
+}
+
+kernel void lif_to_texture(
+    device const float4* state [[buffer(0)]],
+    texture2d<float, access::write> output [[texture(0)]],
+    constant LIFSimParams& sim [[buffer(1)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = output.get_width(), h = output.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    uint gx = min(uint(float(gid.x) / float(w) * float(sim.gridSize)), sim.gridSize - 1);
+    uint gy = min(uint(float(gid.y) / float(h) * float(sim.gridSize)), sim.gridSize - 1);
+    uint idx = min(gy * sim.gridSize + gx, sim.neuronCount - 1);
+    float4 st = state[idx];
+
+    float membrane = clamp(st.x, 0.0f, 1.0f);
+    float spike = clamp(st.y, 0.0f, 1.0f);
+    float refractory = clamp(st.z / max(sim.refractory, 0.001f), 0.0f, 1.0f);
+    float sinceSpike = clamp(sim.timeSeconds - st.w, 0.0f, 1.0f);
+    float hue = fmod(membrane * 220.0f + spike * 90.0f + sim.timeSeconds * 20.0f, 360.0f);
+    float3 color = hsv_to_rgb(float3(hue, 0.55f + spike * 0.4f, max(0.15f, membrane + spike * 0.5f)));
+    float activity = clamp(0.35f + membrane * 0.55f + spike * 0.6f - refractory * 0.25f, 0.0f, 1.0f);
+    output.write(float4(color.r, activity, 1.0f - sinceSpike, 1.0f), gid);
+}
+
+kernel void lif_modulate(
+    texture2d<float, access::read>  input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    texture2d<float, access::read>  lifState [[texture(2)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    float4 src = input.read(gid);
+    float4 lif = lifState.read(gid);
+    float influence = clamp(params.float_params[0], 0.0f, 1.0f);
+    float field = clamp(lif.g + lif.r * 0.85f, 0.0f, 1.0f);
+    float pulse = clamp(field + params.float_params[7] * 0.4f, 0.0f, 1.2f);
+
+    float3 hsv = rgb_to_hsv(src.rgb);
+    hsv.x = fmod(hsv.x + lif.b * 120.0f + params.float_params[2] * 14.0f, 360.0f);
+    hsv.y = clamp(hsv.y + pulse * 0.18f * influence, 0.0f, 1.0f);
+    hsv.z = clamp(hsv.z * (1.0f + pulse * 0.55f * influence), 0.0f, 1.0f);
+
+    float3 modulated = hsv_to_rgb(hsv);
+    float mixAmt = clamp(influence * (0.45f + lif.g * 0.35f), 0.0f, 1.0f);
+    output.write(float4(mix(src.rgb, modulated, mixAmt), src.a), gid);
+}
+
+kernel void lif_replace(
+    texture2d<float, access::read>  input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    texture2d<float, access::read>  lifState [[texture(2)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    float4 src = input.read(gid);
+    float4 lif = lifState.read(gid);
+    float influence = clamp(params.float_params[0], 0.0f, 1.0f);
+    float hue = fmod(params.float_params[2] * 24.0f + lif.r * 260.0f + lif.b * 120.0f, 360.0f);
+    float value = clamp(0.15f + lif.g * 0.85f + params.float_params[7] * 0.2f, 0.0f, 1.0f);
+    float3 neural = hsv_to_rgb(float3(hue, 0.75f + lif.g * 0.2f, value));
+    float3 replaced = mix(src.rgb * 0.15f, neural, 0.75f + lif.g * 0.2f);
+    output.write(float4(mix(src.rgb, replaced, influence), src.a), gid);
 }
