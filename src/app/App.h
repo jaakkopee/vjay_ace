@@ -82,7 +82,6 @@ private:
     std::array<float, NUM_SRC_LAYERS> crossfadeSpeedNorm_ = {0.1f, 0.1f, 0.1f};
     // Normalized scene-change crossfade speed per slot (0–1) — displayed when C is held
     std::array<float, NUM_SRC_LAYERS> sceneCrossfadeSpeedNorm_ = {0.1f, 0.1f, 0.1f};
-
     // Returns the effective mode considering modifier keys.
     KnobMode effectiveMode() const {
         if (rKeyHeld_) return KnobMode::ImgRotate;
