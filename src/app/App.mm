@@ -126,8 +126,8 @@ void App::wireCallbacks() {
         if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
         controlWin_.setKnobMode(m);
-        static const char* opNames[]   = {"Layer 1","Layer 2","Layer 3","Layer 4","Layer 5","Layer 6"};
-        static const char* gainNames[] = {"Gain 1",  "Gain 2",  "Gain 3",  "Gain 4",  "Gain 5",  "Gain 6"};
+        static const char* opNames[]   = {"Opac L0", "-", "Opac L1", "-", "Opac L2", "-"};
+        static const char* gainNames[] = {"Gain 0", "-", "Gain 1", "-", "Gain 2", "-"};
         if (m == KnobMode::LayerLevel) {
             for (int i = 0; i < NUM_KNOBS; ++i)
                 controlWin_.setKnobParamName(i, opNames[i]);
@@ -244,7 +244,7 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
             break;
         case KnobMode::FxAudio:
             if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_FX_LAYERS)
-                compositor_.setAudioGain(knobIdx / 2, v * 2.0f);  // 0.0–2.0x gain
+                compositor_.setAudioGain(knobIdx / 2, v * 8.0f);  // 0.0–8.0x gain (stronger response)
             break;
         case KnobMode::FxParam: {
             int slot = knobIdx / 2, param = knobIdx % 2;

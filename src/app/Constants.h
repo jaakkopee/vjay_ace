@@ -112,6 +112,9 @@ inline const char* fxPatchName(FxPatchId id) {
 // paramIdx: 0 = first knob, 1 = second knob.
 inline const char* fxParamName(FxPatchId id, int paramIdx) {
     switch (id) {
+    case FxPatchId::None:
+    case FxPatchId::Passthrough:
+      return "-";
         case FxPatchId::Blur:
             return paramIdx == 0 ? "Kernel Size" : "-";
         case FxPatchId::ChromaticAberr:

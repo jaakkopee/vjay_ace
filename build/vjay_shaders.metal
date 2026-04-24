@@ -814,11 +814,11 @@ kernel void lif_network(
                                 0.0f, 1.0f);
         float hue = fmod(topology * 240.0f + overshoot * 90.0f + t * 18.0f, 360.0f);
         float3 actColor = hsv_to_rgb(float3(hue, 0.85f, 1.0f));
-        result = mix(src.rgb, actColor, overshoot * 0.75f);
+        result = mix(src.rgb, actColor, clamp(overshoot * 0.95f, 0.0f, 1.0f));
     } else {
         // Neuron at rest: slight attenuation proportional to sub-threshold gap
-        float rest = 1.0f - (thresh - potential) * 0.4f;
-        result = src.rgb * clamp(rest, 0.15f, 1.0f);
+        float rest = 1.0f - (thresh - potential) * 0.75f;
+        result = src.rgb * clamp(rest, 0.05f, 1.0f);
     }
 
     output.write(float4(clamp(result, 0.0f, 1.0f), src.a), gid);

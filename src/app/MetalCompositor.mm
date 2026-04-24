@@ -365,14 +365,17 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
             break;
         case FxPatchId::LIFNetwork:
             pso = psoLIFNetwork_;
-            params.float_params[0] = p0;              // threshold 0-1
-            params.float_params[1] = p1;              // topology 0-1
+            // Map knobs to a more sensitive operating band.
+            // threshold: 0.12..0.72 (avoids dead extremes)
+            // topology:  non-linear curve to make low/mid changes more visible
+            params.float_params[0] = 0.12f + p0 * 0.60f;
+            params.float_params[1] = std::pow(p1, 0.65f);
             params.float_params[2] = t;               // time (animated noise)
             break;
     }
 
     // Inject audio bands into float_params[8..15] and RMS into float_params[7].
-    // Scale by per-FX gain so knobs 0-2 control audio reactivity per FX layer.
+    // Scale by per-FX gain so knobs 0/2/4 control audio reactivity per FX slot.
     float gain = audioGain_[fxSlot];
     params.float_params[7] = audioRms_ * gain;
     for (int b = 0; b < 8; ++b)
