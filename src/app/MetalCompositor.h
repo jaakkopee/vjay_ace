@@ -75,6 +75,8 @@ public:
     // Set how long (in seconds) a crossfade takes for a source slot (0.1–8.0).
     void setCrossfadeSpeed(int srcSlot, float seconds);
 
+    void resetFeedbackBuffers();
+
     // Composite all layers into outputTexture and return a CPU RGBA8 snapshot
     // at WORK_W x WORK_H for blit into the SFML window.
     // Returns false if not initialised.

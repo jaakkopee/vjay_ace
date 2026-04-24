@@ -263,6 +263,11 @@ void MetalCompositor::setCrossfadeSpeed(int srcSlot, float seconds) {
     crossfadeSpeed_[srcSlot] = std::max(seconds, 0.05f);
 }
 
+void MetalCompositor::resetFeedbackBuffers() {
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot)
+        feedbackPrimed_[slot] = false;
+}
+
 // ── dispatch helper ───────────────────────────────────────────────────────────
 
 void MetalCompositor::dispatch(id<MTLComputeCommandEncoder> enc,
@@ -519,12 +524,6 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
     id<MTLCommandBuffer> cmd = [cmdQueue_ commandBuffer];
 
     if (lifNetwork_) {
-        for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
-            if (isLIFPatch(patches_[slot])) {
-                setLIFTopology(topologyFromParam(fxParams_[slot][1]));
-                break;
-            }
-        }
         lifNetwork_->step(cmd, layerTex_[0], audioBands_, audioRms_, dt, now);
     }
 

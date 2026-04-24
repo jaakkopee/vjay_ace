@@ -29,10 +29,18 @@ struct SceneState {
 
     // Per-scene image paths for src layers 0, 2, 4 (slots 0, 1, 2)
     std::array<std::string, NUM_SRC_LAYERS> imgPaths;
+    std::array<float, NUM_SRC_LAYERS> imageCrossfadeSpeedNorm;
+    std::array<float, NUM_SRC_LAYERS> sceneCrossfadeSpeedNorm;
+    int lifTopologyIndex = -1;
+    int lifNeuronCount = 0;
 
     void reset() {
         for (auto& row : knobs) row.fill(-1.0f);
         imgPaths.fill("");
+        imageCrossfadeSpeedNorm.fill(0.1f);
+        sceneCrossfadeSpeedNorm.fill(0.1f);
+        lifTopologyIndex = -1;
+        lifNeuronCount = 0;
     }
 
     // True if at least one knob in the given mode has ever been set.
@@ -78,10 +86,6 @@ private:
     bool     cKeyHeld_  = false;  // C held → scene-change crossfade speed mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
-    // Normalized crossfade speed per slot (0–1) — displayed when F is held
-    std::array<float, NUM_SRC_LAYERS> crossfadeSpeedNorm_ = {0.1f, 0.1f, 0.1f};
-    // Normalized scene-change crossfade speed per slot (0–1) — displayed when C is held
-    std::array<float, NUM_SRC_LAYERS> sceneCrossfadeSpeedNorm_ = {0.1f, 0.1f, 0.1f};
     // Returns the effective mode considering modifier keys.
     KnobMode effectiveMode() const {
         if (rKeyHeld_) return KnobMode::ImgRotate;
@@ -122,6 +126,10 @@ private:
     // ── Engine helpers ────────────────────────────────────────────────────
     // Apply one knob value to the correct engine target (no pickup, no display).
     void applyKnob(int knobIdx, float v, KnobMode mode);
+    // Ensure transform modes have explicit per-scene neutral defaults.
+    void ensureSceneTransformDefaults(int idx);
+    void ensureSceneLIFDefaults(int idx);
+    void applySceneCrossfadeSettings(int idx);
     // Push all stored values in scenes_[idx] to the engine.
     void applySceneToEngine(int idx);
     // Sync all 6 knob arc widgets to the active scene's stored values.

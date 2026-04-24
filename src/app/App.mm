@@ -36,6 +36,24 @@ static sf::Vector2i screenSize(int displayIndex) {
     return {static_cast<int>(frame.size.width), static_cast<int>(frame.size.height)};
 }
 
+static bool isLIFPatch(FxPatchId patch) {
+    return patch == FxPatchId::LIFModulate || patch == FxPatchId::LIFReplace;
+}
+
+static int topologyIndexFromNorm(float value) {
+    return std::clamp(static_cast<int>(value * 5.0f), 0, 4);
+}
+
+static LIFNetwork::Topology topologyFromIndex(int index) {
+    switch (std::clamp(index, 0, 4)) {
+        case 0: return LIFNetwork::Topology::Ring;
+        case 1: return LIFNetwork::Topology::FullyConnected;
+        case 2: return LIFNetwork::Topology::Feedforward;
+        case 3: return LIFNetwork::Topology::SparseRandom;
+        default: return LIFNetwork::Topology::SmallWorld;
+    }
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 App::App() = default;
@@ -277,7 +295,70 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
 
 // ── Push all stored values from one scene to the engine ───────────────────────
 
+void App::ensureSceneTransformDefaults(int idx) {
+    if (idx < 0 || idx >= NUM_SCENES) return;
+
+    SceneState& s = scenes_[idx];
+    const int rotateMi = static_cast<int>(KnobMode::ImgRotate);
+    const int zoomMi   = static_cast<int>(KnobMode::ImgZoom);
+    const int panMi    = static_cast<int>(KnobMode::ImgPan);
+
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
+        const int evenKnob = slot * 2;
+        if (s.knobs[rotateMi][evenKnob] < 0.0f)
+            s.knobs[rotateMi][evenKnob] = 0.0f;
+        if (s.knobs[zoomMi][evenKnob] < 0.0f)
+            s.knobs[zoomMi][evenKnob] = 0.5f;
+
+        const int xKnob = slot * 2;
+        const int yKnob = xKnob + 1;
+        if (s.knobs[panMi][xKnob] < 0.0f)
+            s.knobs[panMi][xKnob] = 0.5f;
+        if (s.knobs[panMi][yKnob] < 0.0f)
+            s.knobs[panMi][yKnob] = 0.5f;
+    }
+}
+
+void App::ensureSceneLIFDefaults(int idx) {
+    if (idx < 0 || idx >= NUM_SCENES) return;
+
+    SceneState& s = scenes_[idx];
+    const Scene& sc = SCENES[idx];
+    if (s.lifNeuronCount <= 0) {
+        int lifPatchCount = 0;
+        for (FxPatchId patch : sc.fx)
+            if (isLIFPatch(patch))
+                ++lifPatchCount;
+        s.lifNeuronCount = (lifPatchCount >= 2) ? 2048 : 1024;
+    }
+
+    if (s.lifTopologyIndex < 0) {
+        int fxMi = static_cast<int>(KnobMode::FxParam);
+        for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+            if (!isLIFPatch(sc.fx[slot])) continue;
+            float stored = s.knobs[fxMi][slot * 2 + 1];
+            float source = (stored >= 0.0f) ? stored : sc.params[slot][1];
+            s.lifTopologyIndex = topologyIndexFromNorm(source);
+            break;
+        }
+        if (s.lifTopologyIndex < 0)
+            s.lifTopologyIndex = 0;
+    }
+}
+
+void App::applySceneCrossfadeSettings(int idx) {
+    if (idx < 0 || idx >= NUM_SCENES) return;
+    const SceneState& s = scenes_[idx];
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
+        compositor_.setCrossfadeSpeed(slot, 0.1f + s.imageCrossfadeSpeedNorm[slot] * 7.9f);
+}
+
 void App::applySceneToEngine(int idx) {
+    ensureSceneTransformDefaults(idx);
+    ensureSceneLIFDefaults(idx);
+    applySceneCrossfadeSettings(idx);
+    compositor_.setLIFTopology(topologyFromIndex(scenes_[idx].lifTopologyIndex));
+    compositor_.setLIFNeuronCount(scenes_[idx].lifNeuronCount);
     const SceneState& s = scenes_[idx];
     for (int mi = 0; mi < SceneState::NMODES; ++mi) {
         auto mode = static_cast<KnobMode>(mi);
@@ -312,7 +393,7 @@ void App::refreshKnobDisplay() {
         for (int k = 0; k < NUM_KNOBS; ++k) {
             if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
             int slot = k / 2;
-            controlWin_.setKnobValue(k, static_cast<int>(crossfadeSpeedNorm_[slot] * 127.0f));
+            controlWin_.setKnobValue(k, static_cast<int>(scenes_[currentScene_].imageCrossfadeSpeedNorm[slot] * 127.0f));
         }
         return;
     }
@@ -322,7 +403,7 @@ void App::refreshKnobDisplay() {
         for (int k = 0; k < NUM_KNOBS; ++k) {
             if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
             int slot = k / 2;
-            controlWin_.setKnobValue(k, static_cast<int>(sceneCrossfadeSpeedNorm_[slot] * 127.0f));
+            controlWin_.setKnobValue(k, static_cast<int>(scenes_[currentScene_].sceneCrossfadeSpeedNorm[slot] * 127.0f));
         }
         return;
     }
@@ -366,7 +447,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     if (fKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
-            crossfadeSpeedNorm_[slot] = normValue;
+            scenes_[currentScene_].imageCrossfadeSpeedNorm[slot] = normValue;
             compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
             controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         }
@@ -377,7 +458,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     if (cKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
-            sceneCrossfadeSpeedNorm_[slot] = normValue;
+            scenes_[currentScene_].sceneCrossfadeSpeedNorm[slot] = normValue;
             controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         }
         return;
@@ -387,6 +468,13 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
 
     // Immediate mode: always store and apply on every MIDI movement.
     soft = normValue;
+    if (eff == KnobMode::FxParam && (knobIdx % 2 == 1)) {
+        int slot = knobIdx / 2;
+        if (slot < NUM_FX_LAYERS && isLIFPatch(SCENES[currentScene_].fx[slot])) {
+            scenes_[currentScene_].lifTopologyIndex = topologyIndexFromNorm(normValue);
+            compositor_.setLIFTopology(topologyFromIndex(scenes_[currentScene_].lifTopologyIndex));
+        }
+    }
     applyKnob(knobIdx, normValue, eff);
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
@@ -398,6 +486,8 @@ void App::onSceneSelect(int sceneIdx) {
 
     currentScene_ = sceneIdx;
     const Scene& sc = SCENES[sceneIdx];
+
+    compositor_.resetFeedbackBuffers();
 
     // 1. Apply the scene's FX patch selection.
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
@@ -413,7 +503,7 @@ void App::onSceneSelect(int sceneIdx) {
         const std::string& path = scenes_[sceneIdx].imgPaths[slot];
         if (!path.empty()) {
             // Capture current frame and set scene-change crossfade speed before loading new image.
-            compositor_.setCrossfadeSpeed(slot, 0.1f + sceneCrossfadeSpeedNorm_[slot] * 7.9f);
+            compositor_.setCrossfadeSpeed(slot, 0.1f + scenes_[sceneIdx].sceneCrossfadeSpeedNorm[slot] * 7.9f);
             compositor_.beginCrossfade(slot);
             layers_.loadMedia(slot * 2, path);
         }
@@ -422,6 +512,9 @@ void App::onSceneSelect(int sceneIdx) {
 
     int fxMi = static_cast<int>(KnobMode::FxParam);
     SceneState& s = scenes_[sceneIdx];
+
+    ensureSceneTransformDefaults(sceneIdx);
+    ensureSceneLIFDefaults(sceneIdx);
 
     if (!s.hasData(fxMi)) {
         // First visit: seed FxParam knobs from SCENES[] defaults.
@@ -453,7 +546,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
     if (fKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
-            crossfadeSpeedNorm_[slot] = normValue;
+            scenes_[currentScene_].imageCrossfadeSpeedNorm[slot] = normValue;
             compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
         }
         controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
@@ -464,7 +557,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
     if (cKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
-            sceneCrossfadeSpeedNorm_[slot] = normValue;
+            scenes_[currentScene_].sceneCrossfadeSpeedNorm[slot] = normValue;
         }
         controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         return;
@@ -473,6 +566,13 @@ void App::onKnobDrag(int knobIdx, float normValue) {
     int mi = static_cast<int>(knobMode_);
     // GUI drag bypasses pickup: write directly to scene and sync physical tracker.
     scenes_[currentScene_].knobs[mi][knobIdx] = normValue;
+    if (knobMode_ == KnobMode::FxParam && (knobIdx % 2 == 1)) {
+        int slot = knobIdx / 2;
+        if (slot < NUM_FX_LAYERS && isLIFPatch(SCENES[currentScene_].fx[slot])) {
+            scenes_[currentScene_].lifTopologyIndex = topologyIndexFromNorm(normValue);
+            compositor_.setLIFTopology(topologyFromIndex(scenes_[currentScene_].lifTopologyIndex));
+        }
+    }
     knobLastPhys_[knobIdx] = normValue;
     applyKnob(knobIdx, normValue, knobMode_);
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
@@ -484,6 +584,8 @@ void App::onImageSelected(int slotIdx, const std::string& path) {
     if (slotIdx < 0 || slotIdx >= NUM_SRC_LAYERS) return;
     if (currentScene_ >= 0) {
         scenes_[currentScene_].imgPaths[slotIdx] = path;
+        compositor_.setCrossfadeSpeed(slotIdx,
+                                      0.1f + scenes_[currentScene_].imageCrossfadeSpeedNorm[slotIdx] * 7.9f);
     } else {
         // No scene active yet — store in every scene that has no image for this slot
         // so the image persists regardless of which scene is selected first.
@@ -512,7 +614,7 @@ void App::saveState() const {
         if (!f) { std::cerr << "[App] Could not open temp state file for writing\n"; return; }
         // Write magic + version for future-proofing
         const uint32_t magic = 0x56414345; // 'VACE'
-        const uint32_t ver   = 7;
+        const uint32_t ver   = 9;
         f.write(reinterpret_cast<const char*>(&magic), 4);
         f.write(reinterpret_cast<const char*>(&ver),   4);
         // Write all 16 scene states (knobs + image paths)
@@ -520,6 +622,12 @@ void App::saveState() const {
             for (const auto& row : s.knobs)
                 for (float v : row)
                     f.write(reinterpret_cast<const char*>(&v), sizeof(float));
+            for (float v : s.imageCrossfadeSpeedNorm)
+                f.write(reinterpret_cast<const char*>(&v), sizeof(float));
+            for (float v : s.sceneCrossfadeSpeedNorm)
+                f.write(reinterpret_cast<const char*>(&v), sizeof(float));
+            f.write(reinterpret_cast<const char*>(&s.lifTopologyIndex), sizeof(int));
+            f.write(reinterpret_cast<const char*>(&s.lifNeuronCount), sizeof(int));
             // Write 3 image paths as length-prefixed strings
             for (const auto& p : s.imgPaths) {
                 uint32_t len = static_cast<uint32_t>(p.size());
@@ -550,17 +658,21 @@ void App::loadState() {
     // v3: 3 modes, v4: 4 modes (added ImgRotate), v5: 5 modes (added ImgZoom)
     // v6: 16 scenes (added 2 LIF scenes; O/G keys replace C2/C#2 mode-latch)
     // v7: 6 modes (added ImgPan)
+    // v8: per-scene image-load and scene-change crossfade speed settings
+    // v9: per-scene LIF topology and neuron count settings
     const bool isV3 = (ver == 3);
     const bool isV4 = (ver == 4);
     const bool isV5 = (ver == 5);
     const bool isV6 = (ver == 6);
     const bool isV7 = (ver == 7);
-    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7) {
+    const bool isV8 = (ver == 8);
+    const bool isV9 = (ver == 9);
+    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7 && !isV8 && !isV9) {
         std::cerr << "[App] Ignoring incompatible state file\n";
         return;
     }
     // Older saves have 14 scenes; v6+ has 16. Read only what was saved.
-    const int savedSceneCount = (isV6 || isV7) ? NUM_SCENES : 14;
+    const int savedSceneCount = (isV6 || isV7 || isV8 || isV9) ? NUM_SCENES : 14;
     for (int si = 0; si < savedSceneCount && si < NUM_SCENES; ++si) {
         auto& s = scenes_[si];
         // v3=3 modes, v4=4, v5/v6=5, v7=6
@@ -568,6 +680,16 @@ void App::loadState() {
         for (int mi = 0; mi < savedModes; ++mi)
             for (float& v : s.knobs[mi])
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
+        if (isV8 || isV9) {
+            for (float& v : s.imageCrossfadeSpeedNorm)
+                if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
+            for (float& v : s.sceneCrossfadeSpeedNorm)
+                if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
+        }
+        if (isV9) {
+            if (!f.read(reinterpret_cast<char*>(&s.lifTopologyIndex), sizeof(int))) return;
+            if (!f.read(reinterpret_cast<char*>(&s.lifNeuronCount), sizeof(int))) return;
+        }
         // Rows beyond what was saved remain at -1 (default from reset())
         // Read 3 image paths
         for (auto& p : s.imgPaths) {
@@ -602,6 +724,7 @@ void App::loadState() {
             if (!path.empty()) layers_.loadMedia(slot * 2, path);
         }
         mediaPickerWin_.setSlotPaths(scenes_[currentScene_].imgPaths);
+        ensureSceneTransformDefaults(currentScene_);
         applySceneToEngine(currentScene_);
     }
     std::cout << "[App] State restored from " << statePath() << "\n";
