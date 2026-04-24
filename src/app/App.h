@@ -84,6 +84,7 @@ private:
     bool     pKeyHeld_  = false;  // P held → ImgPan mode
     bool     fKeyHeld_  = false;  // F held → crossfade speed mode
     bool     cKeyHeld_  = false;  // C held → scene-change crossfade speed mode
+    bool     nKeyHeld_  = false;  // N held → LIF neuron count mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
     // Returns the effective mode considering modifier keys.
@@ -130,6 +131,8 @@ private:
     void ensureSceneTransformDefaults(int idx);
     void ensureSceneLIFDefaults(int idx);
     void applySceneCrossfadeSettings(int idx);
+    static int lifNeuronCountFromNorm(float v);
+    static float normFromLIFNeuronCount(int neuronCount);
     // Push all stored values in scenes_[idx] to the engine.
     void applySceneToEngine(int idx);
     // Sync all 6 knob arc widgets to the active scene's stored values.

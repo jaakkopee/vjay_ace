@@ -54,6 +54,19 @@ static LIFNetwork::Topology topologyFromIndex(int index) {
     }
 }
 
+int App::lifNeuronCountFromNorm(float v) {
+    static constexpr int kCounts[4] = {512, 1024, 2048, 4096};
+    int idx = std::clamp(static_cast<int>(v * 4.0f), 0, 3);
+    return kCounts[idx];
+}
+
+float App::normFromLIFNeuronCount(int neuronCount) {
+    if (neuronCount <= 512) return 0.0f;
+    if (neuronCount <= 1024) return 1.0f / 3.0f;
+    if (neuronCount <= 2048) return 2.0f / 3.0f;
+    return 1.0f;
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 App::App() = default;
@@ -141,7 +154,7 @@ void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
     midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
     midi_.onModeChange = [this](KnobMode m){
-        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_) return;  // modifier key overrides; ignore while held
+        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_ || nKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
         controlWin_.setKnobMode(m);
         static const char* opNames[]   = {"Opac L0", "-", "Opac L1", "-", "Opac L2", "-"};
@@ -168,6 +181,7 @@ void App::wireCallbacks() {
         static const char* panNames[]   = {"Pan0 X", "Pan0 Y", "Pan1 X", "Pan1 Y", "Pan2 X", "Pan2 Y"};
         static const char* xfadeNames[]  = {"ImgFd 0",   "-", "ImgFd 1",   "-", "ImgFd 2",   "-"};
         static const char* scnFdNames[]  = {"ScnFd 0",   "-", "ScnFd 1",   "-", "ScnFd 2",   "-"};
+        static const char* lifCountNames[] = {"LIF 512-4k", "-", "LIF 512-4k", "-", "LIF 512-4k", "-"};
         if (fKeyHeld_) {
             // F key overrides: show image-load crossfade speed mode
             controlWin_.setKnobMode(KnobMode::FxParam); // reuse any label; will be overridden below
@@ -179,6 +193,12 @@ void App::wireCallbacks() {
             // C key overrides: show scene-change crossfade speed mode
             controlWin_.setKnobMode(KnobMode::FxParam);
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, scnFdNames[i]);
+            refreshKnobDisplay();
+            return;
+        }
+        if (nKeyHeld_) {
+            controlWin_.setKnobMode(KnobMode::FxParam);
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, lifCountNames[i]);
             refreshKnobDisplay();
             return;
         }
@@ -233,6 +253,11 @@ void App::wireCallbacks() {
     controlWin_.onCKey = [this, refreshModifierDisplay](bool pressed) {
         if (pressed == cKeyHeld_) return;
         cKeyHeld_ = pressed;
+        refreshModifierDisplay();
+    };
+    controlWin_.onNKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == nKeyHeld_) return;
+        nKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
     controlWin_.onBKey = [this](bool bypassed) {
@@ -408,6 +433,15 @@ void App::refreshKnobDisplay() {
         return;
     }
 
+    if (nKeyHeld_) {
+        float display = normFromLIFNeuronCount(scenes_[currentScene_].lifNeuronCount);
+        for (int k = 0; k < NUM_KNOBS; ++k) {
+            if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
+            controlWin_.setKnobValue(k, static_cast<int>(display * 127.0f));
+        }
+        return;
+    }
+
     KnobMode eff = effectiveMode();
     int mi = static_cast<int>(eff);
     const SceneState& s = scenes_[currentScene_];
@@ -441,7 +475,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     // If a modifier key is held, override to its mode
     KnobMode effectiveMod = effectiveMode();
     // Only use MIDI-provided mode when no key is held
-        KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_) ? effectiveMod : mode;
+        KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_ || nKeyHeld_) ? effectiveMod : mode;
 
     // F key intercept: set image-load crossfade speed for the even knob's slot, don't store in scene.
     if (fKeyHeld_) {
@@ -460,6 +494,14 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
             int slot = knobIdx / 2;
             scenes_[currentScene_].sceneCrossfadeSpeedNorm[slot] = normValue;
             controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        }
+        return;
+    }
+    if (nKeyHeld_) {
+        if (knobIdx % 2 == 0) {
+            scenes_[currentScene_].lifNeuronCount = lifNeuronCountFromNorm(normValue);
+            compositor_.setLIFNeuronCount(scenes_[currentScene_].lifNeuronCount);
+            refreshKnobDisplay();
         }
         return;
     }
@@ -560,6 +602,15 @@ void App::onKnobDrag(int knobIdx, float normValue) {
             scenes_[currentScene_].sceneCrossfadeSpeedNorm[slot] = normValue;
         }
         controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        return;
+    }
+
+    if (nKeyHeld_) {
+        if (knobIdx % 2 == 0) {
+            scenes_[currentScene_].lifNeuronCount = lifNeuronCountFromNorm(normValue);
+            compositor_.setLIFNeuronCount(scenes_[currentScene_].lifNeuronCount);
+            refreshKnobDisplay();
+        }
         return;
     }
 

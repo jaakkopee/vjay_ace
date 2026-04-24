@@ -77,6 +77,9 @@ public:
     // Fired when the C key is pressed (true) or released (false) → scene XFade speed mode
     std::function<void(bool pressed)> onCKey;
 
+    // Fired when the N key is pressed (true) or released (false) → LIF neuron count mode
+    std::function<void(bool pressed)> onNKey;
+
     // Fired when the B key is toggled (true = bypassed, false = active)
     std::function<void(bool bypassed)> onBKey;
 
@@ -117,6 +120,7 @@ private:
     bool pKeyWas_ = false;
     bool fKeyWas_ = false;
     bool cKeyWas_ = false;
+    bool nKeyWas_ = false;
     bool bKeyWas_ = false;
     bool audioBypassed_ = false;
 

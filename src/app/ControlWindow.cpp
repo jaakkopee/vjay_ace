@@ -229,7 +229,7 @@ bool ControlWindow::handleEvents() {
 }
 
 void ControlWindow::update() {
-    // Poll R, Z, O, G, P key state each frame — robust against TGUI consuming key events.
+    // Poll R, Z, O, G, P, F, C, N key state each frame — robust against TGUI consuming key events.
     bool rNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R);
     bool zNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z);
     bool oNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::O);
@@ -237,6 +237,7 @@ void ControlWindow::update() {
     bool pNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::P);
     bool fNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F);
     bool cNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C);
+    bool nNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::N);
     bool bNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::B);
     if (rNow != rKeyWas_) { rKeyWas_ = rNow; if (onRKey) onRKey(rNow); }
     if (zNow != zKeyWas_) { zKeyWas_ = zNow; if (onZKey) onZKey(zNow); }
@@ -245,6 +246,7 @@ void ControlWindow::update() {
     if (pNow != pKeyWas_) { pKeyWas_ = pNow; if (onPKey) onPKey(pNow); }
     if (fNow != fKeyWas_) { fKeyWas_ = fNow; if (onFKey) onFKey(fNow); }
     if (cNow != cKeyWas_) { cKeyWas_ = cNow; if (onCKey) onCKey(cNow); }
+    if (nNow != nKeyWas_) { nKeyWas_ = nNow; if (onNKey) onNKey(nNow); }
     // B key: toggle bypass on rising edge (key-down event)
     if (bNow && !bKeyWas_) {
         audioBypassed_ = !audioBypassed_;
