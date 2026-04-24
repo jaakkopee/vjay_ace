@@ -303,7 +303,7 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
             break;
         case KnobMode::ImgZoom:
             if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS)
-                compositor_.setLayerZoom(knobIdx / 2, std::pow(4.0f, v - 0.5f));
+                compositor_.setLayerZoom(knobIdx / 2, std::pow(64.0f, v - 0.5f)); // 0.125x .. 8.0x
             break;
         case KnobMode::ImgPan: {
             int slot = knobIdx / 2;  // knob pair: 0/1→slot0, 2/3→slot1, 4/5→slot2
