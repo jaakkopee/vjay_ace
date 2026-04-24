@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <cstdio>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
@@ -135,11 +136,28 @@ void MediaPickerWindow::selectSlot(int idx) {
 void MediaPickerWindow::scanDirectory() {
     fileList_.clear();
     if (scanRoot_.empty()) return;
+
+    std::vector<fs::path> roots;
+    roots.push_back(fs::path(scanRoot_));
+
+    // Also include project-local images directory when scanRoot points to
+    // the stash folder (e.g. <project>/Heikki_stash).
+    const fs::path stashRoot(scanRoot_);
+    const fs::path imagesSibling = stashRoot.parent_path() / "images";
+    if (fs::exists(imagesSibling) && fs::is_directory(imagesSibling))
+        roots.push_back(imagesSibling);
+
+    std::unordered_set<std::string> seen;
     try {
-        for (const auto& entry : fs::recursive_directory_iterator(scanRoot_,
-                fs::directory_options::skip_permission_denied)) {
-            if (entry.is_regular_file() && isMediaFile(entry.path()))
-                fileList_.push_back(entry.path().string());
+        for (const auto& root : roots) {
+            if (!fs::exists(root) || !fs::is_directory(root)) continue;
+            for (const auto& entry : fs::recursive_directory_iterator(root,
+                    fs::directory_options::skip_permission_denied)) {
+                if (!entry.is_regular_file() || !isMediaFile(entry.path())) continue;
+                const std::string path = entry.path().string();
+                if (seen.insert(path).second)
+                    fileList_.push_back(path);
+            }
         }
     } catch (const std::exception& e) {
         std::cerr << "[MediaPicker] Scan error: " << e.what() << "\n";
