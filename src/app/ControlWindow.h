@@ -77,6 +77,12 @@ public:
     // Fired when the C key is pressed (true) or released (false) → scene XFade speed mode
     std::function<void(bool pressed)> onCKey;
 
+    // Fired when the I key is pressed (true) or released (false) → global image XFade override mode
+    std::function<void(bool pressed)> onIKey;
+
+    // Fired when the S key is pressed (true) or released (false) → global scene XFade override mode
+    std::function<void(bool pressed)> onSKey;
+
     // Fired when the N key is pressed (true) or released (false) → LIF neuron count mode
     std::function<void(bool pressed)> onNKey;
 
@@ -120,6 +126,8 @@ private:
     bool pKeyWas_ = false;
     bool fKeyWas_ = false;
     bool cKeyWas_ = false;
+    bool iKeyWas_ = false;
+    bool sKeyWas_ = false;
     bool nKeyWas_ = false;
     bool bKeyWas_ = false;
     bool audioBypassed_ = false;

@@ -9,6 +9,7 @@
 #include "AudioAnalyzer.h"
 #include <vector>
 #include <memory>
+#include <cstdint>
 
 // ── FxPatch (stub base for future per-patch state) ───────────────────────────
 // Each FX layer holds one active patch. Parameters come from MIDI knobs.
@@ -31,6 +32,8 @@ struct SceneState {
     std::array<std::string, NUM_SRC_LAYERS> imgPaths;
     std::array<float, NUM_SRC_LAYERS> imageCrossfadeSpeedNorm;
     std::array<float, NUM_SRC_LAYERS> sceneCrossfadeSpeedNorm;
+    std::array<uint32_t, NUM_SRC_LAYERS> imageCrossfadeVersion;
+    std::array<uint32_t, NUM_SRC_LAYERS> sceneCrossfadeVersion;
     int lifTopologyIndex = -1;
     int lifNeuronCount = 0;
 
@@ -39,6 +42,8 @@ struct SceneState {
         imgPaths.fill("");
         imageCrossfadeSpeedNorm.fill(0.1f);
         sceneCrossfadeSpeedNorm.fill(0.1f);
+        imageCrossfadeVersion.fill(0);
+        sceneCrossfadeVersion.fill(0);
         lifTopologyIndex = -1;
         lifNeuronCount = 0;
     }
@@ -84,6 +89,8 @@ private:
     bool     pKeyHeld_  = false;  // P held → ImgPan mode
     bool     fKeyHeld_  = false;  // F held → crossfade speed mode
     bool     cKeyHeld_  = false;  // C held → scene-change crossfade speed mode
+    bool     iKeyHeld_  = false;  // I held → global image-load crossfade override
+    bool     sKeyHeld_  = false;  // S held → global scene-change crossfade override
     bool     nKeyHeld_  = false;  // N held → LIF neuron count mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
@@ -103,6 +110,13 @@ private:
     // No separate "live buffer" to sync — eliminates all sync bugs.
     std::array<SceneState, NUM_SCENES> scenes_;
     int currentScene_ = -1;  // -1 = no scene active
+
+    // Global crossfade overrides set with I/S modifiers.
+    // A scene-local F/C write takes back priority by bumping that scene slot's version.
+    std::array<float, NUM_SRC_LAYERS> globalImageCrossfadeNorm_ = {0.1f, 0.1f, 0.1f};
+    std::array<float, NUM_SRC_LAYERS> globalSceneCrossfadeNorm_ = {0.1f, 0.1f, 0.1f};
+    std::array<uint32_t, NUM_SRC_LAYERS> globalImageCrossfadeVersion_ = {0, 0, 0};
+    std::array<uint32_t, NUM_SRC_LAYERS> globalSceneCrossfadeVersion_ = {0, 0, 0};
 
     // Pan/zoom animation state (when changing scenes)
     bool panZoomAnimating_ = false;
@@ -141,6 +155,12 @@ private:
     void ensureSceneTransformDefaults(int idx);
     void ensureSceneLIFDefaults(int idx);
     void applySceneCrossfadeSettings(int idx);
+    float effectiveImageCrossfadeNorm(int sceneIdx, int slot) const;
+    float effectiveSceneCrossfadeNorm(int sceneIdx, int slot) const;
+    void setLocalImageCrossfadeNorm(int sceneIdx, int slot, float norm);
+    void setLocalSceneCrossfadeNorm(int sceneIdx, int slot, float norm);
+    void setGlobalImageCrossfadeNorm(int slot, float norm);
+    void setGlobalSceneCrossfadeNorm(int slot, float norm);
     static int lifNeuronCountFromNorm(float v);
     static float normFromLIFNeuronCount(int neuronCount);
     // Push all stored values in scenes_[idx] to the engine.
