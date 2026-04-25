@@ -104,6 +104,16 @@ private:
     std::array<SceneState, NUM_SCENES> scenes_;
     int currentScene_ = -1;  // -1 = no scene active
 
+    // Pan/zoom animation state (when changing scenes)
+    bool panZoomAnimating_ = false;
+    float panZoomAnimTime_ = 0.0f;  // elapsed time
+    float panZoomAnimDuration_ = 0.5f;  // dynamically set from scene crossfade speed
+    std::array<float, NUM_SRC_LAYERS> panXFrom_, panXTo_;
+    std::array<float, NUM_SRC_LAYERS> panYFrom_, panYTo_;
+    std::array<float, NUM_SRC_LAYERS> zoomFrom_, zoomTo_;
+    void startPanZoomAnimation();
+    void updatePanZoomAnimation(float deltaTime);
+
     // Last raw physical CC position per knob (0.0–1.0).
     // Updated on every CC event; used for pickup catch-up detection.
     std::array<float, NUM_KNOBS> knobLastPhys_;

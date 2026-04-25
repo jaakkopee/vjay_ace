@@ -221,6 +221,17 @@ void MetalCompositor::setLayerPanY(int srcSlot, float offset) {
     panY_[srcSlot] = offset;
 }
 
+void MetalCompositor::getLayerPan(int srcSlot, float& outOffsetX, float& outOffsetY) const {
+    assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
+    outOffsetX = panX_[srcSlot];
+    outOffsetY = panY_[srcSlot];
+}
+
+float MetalCompositor::getLayerZoom(int srcSlot) const {
+    assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
+    return zooms_[srcSlot];
+}
+
 void MetalCompositor::setAudioBands(const float* bands, int count, float rms) {
     int n = std::min(count, static_cast<int>(audioBands_.size()));
     for (int i = 0; i < n; ++i) audioBands_[i] = bands[i];

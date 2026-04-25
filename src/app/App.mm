@@ -521,6 +521,61 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
 
+// ── Pan/Zoom animation helpers ────────────────────────────────────────────────
+
+void App::startPanZoomAnimation() {
+    // Capture current pan/zoom values as the starting point
+    const int panMi = static_cast<int>(KnobMode::ImgPan);
+    const int zoomMi = static_cast<int>(KnobMode::ImgZoom);
+    
+    // Calculate animation duration from average of scene crossfade speeds
+    float avgCrossfadeSpeedNorm = 0.0f;
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
+        avgCrossfadeSpeedNorm += scenes_[currentScene_].sceneCrossfadeSpeedNorm[slot];
+    avgCrossfadeSpeedNorm /= static_cast<float>(NUM_SRC_LAYERS);
+    panZoomAnimDuration_ = 0.1f + avgCrossfadeSpeedNorm * 7.9f;  // 0.1–8.0 seconds
+    
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
+        // Current pan values from compositor
+        compositor_.getLayerPan(slot, panXFrom_[slot], panYFrom_[slot]);
+        panXTo_[slot] = (scenes_[currentScene_].knobs[panMi][slot * 2] - 0.5f) * 2.0f;
+        panYTo_[slot] = (scenes_[currentScene_].knobs[panMi][slot * 2 + 1] - 0.5f) * 2.0f;
+        
+        // Current zoom value from compositor
+        zoomFrom_[slot] = compositor_.getLayerZoom(slot);
+        float zoomNorm = scenes_[currentScene_].knobs[zoomMi][slot * 2];
+        zoomTo_[slot] = zoomNorm >= 0.0f ? std::pow(64.0f, zoomNorm - 0.5f) : 1.0f;
+    }
+    
+    panZoomAnimTime_ = 0.0f;
+    panZoomAnimating_ = true;
+}
+
+void App::updatePanZoomAnimation(float deltaTime) {
+    if (!panZoomAnimating_) return;
+    
+    panZoomAnimTime_ += deltaTime;
+    float progress = panZoomAnimTime_ / panZoomAnimDuration_;
+    
+    if (progress >= 1.0f) {
+        progress = 1.0f;
+        panZoomAnimating_ = false;
+    }
+    
+    // Easing: smooth step for a gentle start/end
+    float eased = progress * progress * (3.0f - 2.0f * progress);
+    
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
+        float panX = panXFrom_[slot] + (panXTo_[slot] - panXFrom_[slot]) * eased;
+        float panY = panYFrom_[slot] + (panYTo_[slot] - panYFrom_[slot]) * eased;
+        float zoom = zoomFrom_[slot] + (zoomTo_[slot] - zoomFrom_[slot]) * eased;
+        
+        compositor_.setLayerPanX(slot, panX);
+        compositor_.setLayerPanY(slot, panY);
+        compositor_.setLayerZoom(slot, zoom);
+    }
+}
+
 // ── Scene select ──────────────────────────────────────────────────────────────
 
 void App::onSceneSelect(int sceneIdx) {
@@ -568,12 +623,15 @@ void App::onSceneSelect(int sceneIdx) {
         }
     }
 
-    // 2. Apply all stored knob values to the engine.
+    // 2. Start pan/zoom animation before applying the new scene.
+    startPanZoomAnimation();
+
+    // 3. Apply all stored knob values to the engine.
     applySceneToEngine(sceneIdx);
 
-    // 3. Refresh the software knob arcs to show what is actually applied.
+    // 4. Refresh the software knob arcs to show what is actually applied.
     refreshKnobDisplay();
-    // 4. Update knob param name labels to reflect the new scene's FX patches.
+    // 5. Update knob param name labels to reflect the new scene's FX patches.
     refreshKnobParamNames();
     // Persist the new currentScene_ immediately so a crash won't revert it.
     saveState();
@@ -804,6 +862,9 @@ void App::processFrame() {
     layers_.update(60.0f);
     uploadLayers();
     syncCompositorState();
+    
+    // Update pan/zoom animation (60 FPS = ~0.0167s per frame)
+    updatePanZoomAnimation(1.0f / 60.0f);
 
     // ── Audio poll: read latest bands and push to compositor + meter ─────
     if (!audioBypassed_ && audio_.isRunning()) {

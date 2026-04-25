@@ -58,6 +58,10 @@ public:
     void setLayerPanX(int srcSlot, float offset);
     void setLayerPanY(int srcSlot, float offset);
 
+    // Get current pan and zoom values for a source layer slot.
+    void getLayerPan(int srcSlot, float& outOffsetX, float& outOffsetY) const;
+    float getLayerZoom(int srcSlot) const;
+
     // Set audio band magnitudes (0.0-1.0 each).  Call each frame from the main thread.
     // Bands are packed into float_params[8..15] of every FX ShaderParams dispatch.
     void setAudioBands(const float* bands, int count, float rms);
