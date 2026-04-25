@@ -687,6 +687,7 @@ void App::updatePanZoomAnimation(float deltaTime) {
 void App::onSceneSelect(int sceneIdx) {
     if (sceneIdx < 0 || sceneIdx >= NUM_SCENES) return;
 
+    const int prevScene = currentScene_;
     currentScene_ = sceneIdx;
     const Scene& sc = SCENES[sceneIdx];
 
@@ -701,14 +702,20 @@ void App::onSceneSelect(int sceneIdx) {
     controlWin_.setSceneName(sc.name);
     mediaPickerWin_.setSceneName(sc.name);
 
-    // Load this scene's image files into the 3 source layers
+    // Load this scene's image files into the 3 source layers.
+    // Only slots whose image path changes are crossfaded.
     for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
         const std::string& path = scenes_[sceneIdx].imgPaths[slot];
+        const std::string prevPath =
+            (prevScene >= 0 && prevScene < NUM_SCENES) ? scenes_[prevScene].imgPaths[slot] : std::string();
+        const bool changed = (path != prevPath);
         if (!path.empty()) {
-            // Capture current frame and set scene-change crossfade speed before loading new image.
-            compositor_.setCrossfadeSpeed(slot, 0.1f + effectiveSceneCrossfadeNorm(sceneIdx, slot) * 7.9f);
-            compositor_.beginCrossfade(slot);
-            layers_.loadMedia(slot * 2, path);
+            if (changed) {
+                // Scene-triggered image swaps use image-load crossfade (local F or global I override).
+                compositor_.setCrossfadeSpeed(slot, 0.1f + effectiveImageCrossfadeNorm(sceneIdx, slot) * 7.9f);
+                compositor_.beginCrossfade(slot);
+                layers_.loadMedia(slot * 2, path);
+            }
         }
     }
     mediaPickerWin_.setSlotPaths(scenes_[sceneIdx].imgPaths);
