@@ -467,6 +467,9 @@ kernel void feedback_zoom(
     // Colour tint the feedback
     float3 hsv = rgb_to_hsv(feedback.rgb);
     hsv.x = fmod(hsv.x + hue * 0.5f, 360.0f);
+    // Desaturate toward B&W and boost contrast (S-curve on value)
+    hsv.y *= 0.25f;
+    hsv.z = smoothstep(0.25f, 0.75f, hsv.z);
     feedback.rgb = hsv_to_rgb(hsv);
 
     // Blend with the original pixel
