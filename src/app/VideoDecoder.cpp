@@ -1,4 +1,6 @@
 #include "VideoDecoder.h"
+#include <algorithm>
+#include <cstring>
 #include <iostream>
 
 VideoDecoder::VideoDecoder() = default;
@@ -40,27 +42,27 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
         default: break;
     }
 
-    // Aspect-ratio-preserving fit into outW_ x outH_ (letterbox / pillarbox)
+    // Aspect-cover into outW_ x outH_ (scale to fill, then centre-crop).
     {
         float srcAR = float(codecCtx_->width) / float(codecCtx_->height);
         float dstAR = float(outW_) / float(outH_);
-        if (srcAR > dstAR) { // wider than output → pillarbox
-            fitW_ = outW_;
-            fitH_ = int(outW_ / srcAR + 0.5f);
-        } else {             // taller than output → letterbox
-            fitH_ = outH_;
-            fitW_ = int(outH_ * srcAR + 0.5f);
+        if (srcAR > dstAR) { // wider than output: match height, crop width
+            scaledH_ = outH_;
+            scaledW_ = int(outH_ * srcAR + 0.5f);
+        } else {             // taller than output: match width, crop height
+            scaledW_ = outW_;
+            scaledH_ = int(outW_ / srcAR + 0.5f);
         }
         // Keep dimensions even (some codecs require it)
-        fitW_ = fitW_ & ~1;
-        fitH_ = fitH_ & ~1;
-        offX_ = (outW_ - fitW_) / 2;
-        offY_ = (outH_ - fitH_) / 2;
+        scaledW_ = std::max(2, scaledW_ & ~1);
+        scaledH_ = std::max(2, scaledH_ & ~1);
+        cropX_ = std::max(0, (scaledW_ - outW_) / 2);
+        cropY_ = std::max(0, (scaledH_ - outH_) / 2);
     }
 
     swsCtx_ = sws_getContext(
         codecCtx_->width, codecCtx_->height, srcFmt,
-        fitW_, fitH_, AV_PIX_FMT_RGBA,
+        scaledW_, scaledH_, AV_PIX_FMT_RGBA,
         SWS_BILINEAR, nullptr, nullptr, nullptr);
     if (!swsCtx_) { close(); return false; }
 
@@ -77,10 +79,10 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
     packet_    = av_packet_alloc();
 
     rgbaFrame_->format = AV_PIX_FMT_RGBA;
-    rgbaFrame_->width  = fitW_;
-    rgbaFrame_->height = fitH_;
+    rgbaFrame_->width  = scaledW_;
+    rgbaFrame_->height = scaledH_;
     av_image_alloc(rgbaFrame_->data, rgbaFrame_->linesize,
-                   fitW_, fitH_, AV_PIX_FMT_RGBA, 32);
+                   scaledW_, scaledH_, AV_PIX_FMT_RGBA, 32);
 
     return true;
 }
@@ -119,25 +121,21 @@ bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
         if (ret == AVERROR(EAGAIN)) continue;
         if (ret < 0) return false;
 
-        // Scale to fitted RGBA dimensions
+        // Scale to aspect-cover RGBA dimensions.
         sws_scale(swsCtx_,
                   frame_->data, frame_->linesize, 0, codecCtx_->height,
                   rgbaFrame_->data, rgbaFrame_->linesize);
         av_frame_unref(frame_);
 
-        // Blit fitted image centred into an opaque-black-padded outW_*outH_ buffer
+        // Centre-crop to exact output size (no baked padding regions).
         std::size_t byteCount = outW_ * outH_ * 4;
-        outRGBA.assign(byteCount, 0);  // zero R,G,B first
-        // Set alpha=255 for all pixels so padding is opaque black, not transparent.
-        // Transparent padding causes FX like kaleidoscope to lose pixels that fold
-        // into letterbox/pillarbox regions.
-        for (std::size_t i = 3; i < byteCount; i += 4) outRGBA[i] = 255;
+        outRGBA.resize(byteCount);
         const uint8_t* src = rgbaFrame_->data[0];
         int srcStride = rgbaFrame_->linesize[0];
-        for (int row = 0; row < fitH_; ++row) {
-            int dstRow = offY_ + row;
-            uint8_t* dst = outRGBA.data() + (dstRow * outW_ + offX_) * 4;
-            std::memcpy(dst, src + row * srcStride, fitW_ * 4);
+        for (int row = 0; row < outH_; ++row) {
+            const uint8_t* srcRow = src + (cropY_ + row) * srcStride + cropX_ * 4;
+            uint8_t* dst = outRGBA.data() + row * outW_ * 4;
+            std::memcpy(dst, srcRow, outW_ * 4);
         }
 
         // Cache for potential static re-use

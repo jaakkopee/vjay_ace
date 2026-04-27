@@ -647,7 +647,7 @@ kernel void readback_rgba8(
 
 // ── rotate_source ────────────────────────────────────────────────────────────
 // Rotates a source texture around its centre by float_params[0] radians.
-// Uses bilinear sampling; pixels outside the rotated area become transparent black.
+// Uses bilinear sampling with edge clamp to avoid black borders.
 kernel void rotate_source(
     texture2d<float, access::sample> input  [[texture(0)]],
     texture2d<float, access::write>  output [[texture(1)]],
@@ -669,12 +669,7 @@ kernel void rotate_source(
     float srcX = cosA * dx + sinA * dy + cx;
     float srcY = -sinA * dx + cosA * dy + cy;
 
-    if (srcX < 0.0f || srcX >= float(w) || srcY < 0.0f || srcY >= float(h)) {
-        output.write(float4(0.0f), gid);
-        return;
-    }
-
-    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
     float2 uv = float2(srcX / float(w), srcY / float(h));
     output.write(input.sample(s, uv), gid);
 }
@@ -682,7 +677,7 @@ kernel void rotate_source(
 // ── zoom_source ───────────────────────────────────────────────────────────────
 // Zooms a source texture around its centre.
 // float_params[0] = zoom factor (1.0 = no change, >1 = zoom in, <1 = zoom out)
-// Pixels outside the source area are transparent black.
+// Uses edge clamp so zoom-out does not expose black blocks.
 kernel void zoom_source(
     texture2d<float, access::sample> input  [[texture(0)]],
     texture2d<float, access::write>  output [[texture(1)]],
@@ -700,12 +695,7 @@ kernel void zoom_source(
     float srcX = cx + (float(gid.x) - cx) / zoom;
     float srcY = cy + (float(gid.y) - cy) / zoom;
 
-    if (srcX < 0.0f || srcX >= float(w) || srcY < 0.0f || srcY >= float(h)) {
-        output.write(float4(0.0f), gid);
-        return;
-    }
-
-    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
     float2 uv = float2(srcX / float(w), srcY / float(h));
     output.write(input.sample(s, uv), gid);
 }
@@ -731,7 +721,7 @@ kernel void crossfade_blend(
 // Translates (pans) a source texture by a fractional pixel offset.
 // float_params[0] = panX  (-1.0 = full left,  0.0 = centre, +1.0 = full right)
 // float_params[1] = panY  (-1.0 = full up,    0.0 = centre, +1.0 = full down)
-// Pixels that shift outside the frame become transparent black.
+// Uses edge clamp so pan/zoom combinations do not expose black regions.
 kernel void pan_source(
     texture2d<float, access::sample> input  [[texture(0)]],
     texture2d<float, access::write>  output [[texture(1)]],
@@ -745,12 +735,7 @@ kernel void pan_source(
     float srcX = float(gid.x) - params.float_params[0] * float(w);
     float srcY = float(gid.y) - params.float_params[1] * float(h);
 
-    if (srcX < 0.0f || srcX >= float(w) || srcY < 0.0f || srcY >= float(h)) {
-        output.write(float4(0.0f), gid);
-        return;
-    }
-
-    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
     output.write(input.sample(s, float2(srcX / float(w), srcY / float(h))), gid);
 }
 
