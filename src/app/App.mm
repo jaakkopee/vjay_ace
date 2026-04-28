@@ -886,7 +886,7 @@ void App::onSceneSelect(int sceneIdx) {
     mediaPickerWin_.setSceneName(sc.name);
 
     // Load this scene's image files into the 3 source layers.
-    // Only slots whose image path changes are crossfaded.
+    // Changed paths are crossfaded; unchanged paths are still reloaded to reset playback.
     for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
         const std::string& path = scenes_[sceneIdx].imgPaths[slot];
         const std::string prevPath =
@@ -897,8 +897,10 @@ void App::onSceneSelect(int sceneIdx) {
                 // Scene-triggered image swaps use image-load crossfade (local F or global I override).
                 compositor_.setCrossfadeSpeed(slot, 0.1f + effectiveImageCrossfadeNorm(sceneIdx, slot) * 7.9f);
                 compositor_.beginCrossfade(slot);
-                layers_.loadMedia(slot * 2, path);
             }
+            // Always reload scene media so selecting a scene can reset slot playback,
+            // even when the path is unchanged from the previous scene.
+            layers_.loadMedia(slot * 2, path);
         }
     }
     mediaPickerWin_.setSlotPaths(scenes_[sceneIdx].imgPaths);
@@ -1034,6 +1036,9 @@ void App::onKnobDrag(int knobIdx, float normValue) {
 
 void App::onImageSelected(int slotIdx, const std::string& path) {
     if (slotIdx < 0 || slotIdx >= NUM_SRC_LAYERS) return;
+    const int layerIdx = slotIdx * 2;
+    const bool samePathAsLoaded = (layers_.state(layerIdx).mediaPath == path);
+
     if (currentScene_ >= 0) {
         scenes_[currentScene_].imgPaths[slotIdx] = path;
         compositor_.setCrossfadeSpeed(slotIdx,
@@ -1045,8 +1050,12 @@ void App::onImageSelected(int slotIdx, const std::string& path) {
             if (s.imgPaths[slotIdx].empty())
                 s.imgPaths[slotIdx] = path;
     }
-    compositor_.beginCrossfade(slotIdx);  // capture current frame before new image uploads
-    layers_.loadMedia(slotIdx * 2, path);
+    // Reloading the exact same file should reset playback in that slot.
+    // Only use visual crossfade when the incoming path differs.
+    if (!samePathAsLoaded)
+        compositor_.beginCrossfade(slotIdx);  // capture current frame before new image uploads
+
+    layers_.loadMedia(layerIdx, path);
     saveState();  // persist immediately — don't rely on clean exit
 }
 
