@@ -154,14 +154,16 @@ void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
     midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
     midi_.onModeChange = [this](KnobMode m){
-        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_ || iKeyHeld_ || sKeyHeld_ || nKeyHeld_) return;  // modifier key overrides; ignore while held
+        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_ || iKeyHeld_ || sKeyHeld_ || lKeyHeld_ || nKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
         controlWin_.setKnobMode(m);
         static const char* opNames[]   = {"Opac L0", "-", "Opac L1", "-", "Opac L2", "-"};
+        static const char* gOpNames[]  = {"GOpac L0", "-", "GOpac L1", "-", "GOpac L2", "-"};
         static const char* gainNames[] = {"Gain 0", "-", "Gain 1", "-", "Gain 2", "-"};
         if (m == KnobMode::LayerLevel) {
+            const char** names = lKeyHeld_ ? gOpNames : opNames;
             for (int i = 0; i < NUM_KNOBS; ++i)
-                controlWin_.setKnobParamName(i, opNames[i]);
+                controlWin_.setKnobParamName(i, names[i]);
         } else if (m == KnobMode::FxAudio) {
             for (int i = 0; i < NUM_KNOBS; ++i)
                 controlWin_.setKnobParamName(i, gainNames[i]);
@@ -177,6 +179,7 @@ void App::wireCallbacks() {
         static const char* rotNames[]   = {"Rot L0",    "-", "Rot L1",    "-", "Rot L2",    "-"};
         static const char* zoomNames[]  = {"Zoom L0",   "-", "Zoom L1",   "-", "Zoom L2",   "-"};
         static const char* opNames[]    = {"Opac L0",   "-", "Opac L1",   "-", "Opac L2",   "-"};
+        static const char* gOpNames[]   = {"GOpac L0",  "-", "GOpac L1",  "-", "GOpac L2",  "-"};
         static const char* gainNames[]  = {"Gain 0",    "-", "Gain 1",    "-", "Gain 2",    "-"};
         static const char* panNames[]   = {"Pan0 X", "Pan0 Y", "Pan1 X", "Pan1 Y", "Pan2 X", "Pan2 Y"};
         static const char* xfadeNames[]  = {"ImgFd 0",   "-", "ImgFd 1",   "-", "ImgFd 2",   "-"};
@@ -195,6 +198,13 @@ void App::wireCallbacks() {
             // S key overrides: show global scene-change crossfade speed mode
             controlWin_.setKnobMode(KnobMode::FxParam);
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gScnFdNames[i]);
+            refreshKnobDisplay();
+            return;
+        }
+        if (lKeyHeld_) {
+            // L key overrides: show global opacity override mode
+            controlWin_.setKnobMode(KnobMode::LayerLevel);
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gOpNames[i]);
             refreshKnobDisplay();
             return;
         }
@@ -225,7 +235,8 @@ void App::wireCallbacks() {
         } else if (eff == KnobMode::ImgZoom) {
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, zoomNames[i]);
         } else if (eff == KnobMode::LayerLevel) {
-            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, opNames[i]);
+            const char** names = lKeyHeld_ ? gOpNames : opNames;
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, names[i]);
         } else if (eff == KnobMode::FxAudio) {
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gainNames[i]);
         } else if (eff == KnobMode::ImgPan) {
@@ -279,6 +290,11 @@ void App::wireCallbacks() {
     controlWin_.onSKey = [this, refreshModifierDisplay](bool pressed) {
         if (pressed == sKeyHeld_) return;
         sKeyHeld_ = pressed;
+        refreshModifierDisplay();
+    };
+    controlWin_.onLKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == lKeyHeld_) return;
+        lKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
     controlWin_.onNKey = [this, refreshModifierDisplay](bool pressed) {
@@ -370,6 +386,20 @@ void App::ensureSceneTransformDefaults(int idx) {
     }
 }
 
+void App::ensureSceneOpacityDefaults(int idx) {
+    if (idx < 0 || idx >= NUM_SCENES) return;
+
+    SceneState& s = scenes_[idx];
+    const int layerMi = static_cast<int>(KnobMode::LayerLevel);
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+        const int knob = slot * 2;
+        if (s.knobs[layerMi][knob] < 0.0f)
+            s.knobs[layerMi][knob] = 1.0f;
+        if (s.opacityVersion[slot] == 0)
+            s.opacityVersion[slot] = globalOpacityVersion_[slot];
+    }
+}
+
 void App::ensureSceneLIFDefaults(int idx) {
     if (idx < 0 || idx >= NUM_SCENES) return;
 
@@ -419,6 +449,29 @@ float App::effectiveSceneCrossfadeNorm(int sceneIdx, int slot) const {
     return s.sceneCrossfadeSpeedNorm[slot];
 }
 
+float App::effectiveLayerOpacityNorm(int sceneIdx, int slot) const {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES || slot < 0 || slot >= NUM_FX_LAYERS) return 1.0f;
+    const SceneState& s = scenes_[sceneIdx];
+    if (s.opacityVersion[slot] < globalOpacityVersion_[slot])
+        return globalOpacityNorm_[slot];
+    const int layerMi = static_cast<int>(KnobMode::LayerLevel);
+    const float local = s.knobs[layerMi][slot * 2];
+    return (local >= 0.0f) ? local : 1.0f;
+}
+
+void App::setLocalLayerOpacityNorm(int sceneIdx, int slot, float norm) {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES || slot < 0 || slot >= NUM_FX_LAYERS) return;
+    const int layerMi = static_cast<int>(KnobMode::LayerLevel);
+    scenes_[sceneIdx].knobs[layerMi][slot * 2] = norm;
+    scenes_[sceneIdx].opacityVersion[slot] = globalOpacityVersion_[slot];
+}
+
+void App::setGlobalLayerOpacityNorm(int slot, float norm) {
+    if (slot < 0 || slot >= NUM_FX_LAYERS) return;
+    globalOpacityNorm_[slot] = norm;
+    ++globalOpacityVersion_[slot];
+}
+
 void App::setLocalImageCrossfadeNorm(int sceneIdx, int slot, float norm) {
     if (sceneIdx < 0 || sceneIdx >= NUM_SCENES || slot < 0 || slot >= NUM_SRC_LAYERS) return;
     scenes_[sceneIdx].imageCrossfadeSpeedNorm[slot] = norm;
@@ -445,12 +498,19 @@ void App::setGlobalSceneCrossfadeNorm(int slot, float norm) {
 
 void App::applySceneToEngine(int idx) {
     ensureSceneTransformDefaults(idx);
+    ensureSceneOpacityDefaults(idx);
     ensureSceneLIFDefaults(idx);
     applySceneCrossfadeSettings(idx);
     compositor_.setLIFTopology(topologyFromIndex(scenes_[idx].lifTopologyIndex));
     compositor_.setLIFNeuronCount(scenes_[idx].lifNeuronCount);
     const SceneState& s = scenes_[idx];
+
+    // Layer opacity is scene-local by default and can be globally overridden.
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot)
+        applyKnob(slot * 2, effectiveLayerOpacityNorm(idx, slot), KnobMode::LayerLevel);
+
     for (int mi = 0; mi < SceneState::NMODES; ++mi) {
+        if (mi == static_cast<int>(KnobMode::LayerLevel)) continue;
         auto mode = static_cast<KnobMode>(mi);
         for (int k = 0; k < NUM_KNOBS; ++k) {
             if (s.knobs[mi][k] >= 0.0f)
@@ -494,6 +554,16 @@ void App::refreshKnobDisplay() {
             if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
             int slot = k / 2;
             controlWin_.setKnobValue(k, static_cast<int>(globalSceneCrossfadeNorm_[slot] * 127.0f));
+        }
+        return;
+    }
+
+    // L key mode: show global opacity override values for even knobs.
+    if (lKeyHeld_) {
+        for (int k = 0; k < NUM_KNOBS; ++k) {
+            if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
+            int slot = k / 2;
+            controlWin_.setKnobValue(k, static_cast<int>(globalOpacityNorm_[slot] * 127.0f));
         }
         return;
     }
@@ -543,6 +613,8 @@ void App::refreshKnobDisplay() {
             continue;
         }
         float v = s.knobs[mi][k];
+        if (eff == KnobMode::LayerLevel && (k % 2 == 0))
+            v = effectiveLayerOpacityNorm(currentScene_, k / 2);
         // If this knob hasn't been set in this scene yet, show physical position.
         float display = (v >= 0.0f) ? v : (evenOnlyMode ? 0.0f : knobLastPhys_[k]);
         controlWin_.setKnobValue(k, static_cast<int>(display * 127.0f));
@@ -560,7 +632,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     // If a modifier key is held, override to its mode
     KnobMode effectiveMod = effectiveMode();
     // Only use MIDI-provided mode when no modifier key is held.
-    KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_ || iKeyHeld_ || sKeyHeld_ || nKeyHeld_) ? effectiveMod : mode;
+    KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || fKeyHeld_ || cKeyHeld_ || iKeyHeld_ || sKeyHeld_ || lKeyHeld_ || nKeyHeld_) ? effectiveMod : mode;
 
     // I key intercept: set global image-load crossfade speed override for the even knob's slot.
     if (iKeyHeld_) {
@@ -578,6 +650,17 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             setGlobalSceneCrossfadeNorm(slot, normValue);
+            controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        }
+        return;
+    }
+
+    // L key intercept: set global opacity override for the even knob's FX slot.
+    if (lKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_FX_LAYERS) {
+            int slot = knobIdx / 2;
+            setGlobalLayerOpacityNorm(slot, normValue);
+            applyKnob(knobIdx, normValue, KnobMode::LayerLevel);
             controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         }
         return;
@@ -615,6 +698,9 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     float& soft = scenes_[currentScene_].knobs[mi][knobIdx];
 
     // Immediate mode: always store and apply on every MIDI movement.
+    if (eff == KnobMode::LayerLevel && knobIdx % 2 == 0) {
+        setLocalLayerOpacityNorm(currentScene_, knobIdx / 2, normValue);
+    }
     soft = normValue;
     if (eff == KnobMode::FxParam && (knobIdx % 2 == 1)) {
         int slot = knobIdx / 2;
@@ -776,6 +862,17 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         return;
     }
 
+    // L key intercept: set global opacity override.
+    if (lKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_FX_LAYERS) {
+            int slot = knobIdx / 2;
+            setGlobalLayerOpacityNorm(slot, normValue);
+            applyKnob(knobIdx, normValue, KnobMode::LayerLevel);
+        }
+        controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        return;
+    }
+
     // F key intercept: set scene-local image-load crossfade speed.
     if (fKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
@@ -808,6 +905,8 @@ void App::onKnobDrag(int knobIdx, float normValue) {
 
     int mi = static_cast<int>(knobMode_);
     // GUI drag bypasses pickup: write directly to scene and sync physical tracker.
+    if (knobMode_ == KnobMode::LayerLevel && knobIdx % 2 == 0)
+        setLocalLayerOpacityNorm(currentScene_, knobIdx / 2, normValue);
     scenes_[currentScene_].knobs[mi][knobIdx] = normValue;
     if (knobMode_ == KnobMode::FxParam && (knobIdx % 2 == 1)) {
         int slot = knobIdx / 2;

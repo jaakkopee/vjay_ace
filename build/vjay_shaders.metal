@@ -491,10 +491,19 @@ kernel void circle_quilt(
     int w = input.get_width(), h = input.get_height();
     if (gid.x >= (uint)w || gid.y >= (uint)h) return;
 
-    int cols  = max(4, params.int_params[0]);
-    // audio: RMS expands circle radii
-    float rs  = clamp(params.float_params[0] + params.float_params[7] * 0.8f, 0.0f, 1.0f);
-    float hoff= params.float_params[1];
+    int   baseCols = max(4, params.int_params[0]);
+    float rms      = params.float_params[7];
+    float bass     = params.float_params[9];   // 60-250 Hz
+    float mid      = params.float_params[11];  // 500-2 kHz
+    float air      = params.float_params[15];  // 12-20 kHz
+
+    // audio: bass opens up the quilt (fewer/larger cells), highs add detail.
+    int cols = clamp(int(float(baseCols) - bass * 24.0f + air * 8.0f), 4, 96);
+    float pulse = smoothstep(0.15f, 0.9f, max(rms, bass * 0.7f + mid * 0.3f));
+
+    // audio: loud moments increase radius and rotate hue.
+    float rs   = clamp(params.float_params[0] + rms * 0.7f + bass * 0.35f, 0.05f, 1.25f);
+    float hoff = params.float_params[1] + mid * 120.0f + air * 180.0f;
 
     // Cell this pixel belongs to
     float cellW = float(w) / float(cols);
@@ -512,14 +521,25 @@ kernel void circle_quilt(
     float maxRadius = min(cellW, cellH) * 0.5f * rs;
     float radius    = lum * maxRadius;
     float dist      = length(float2(gid) - cellCentre);
+    float ringW     = max(0.8f, min(cellW, cellH) * (0.02f + pulse * 0.12f));
 
     if (dist <= radius) {
         float3 hsv = rgb_to_hsv(samp.rgb);
         hsv.x = fmod(hsv.x + hoff, 360.0f);
-        hsv.y = min(1.0f, hsv.y + 0.2f);
+        hsv.y = min(1.0f, hsv.y + 0.2f + pulse * 0.25f);
+        hsv.z = min(1.0f, hsv.z + rms * 0.25f);
         output.write(float4(hsv_to_rgb(hsv), samp.a), gid);
+    } else if (dist <= radius + ringW) {
+        float3 hsv = rgb_to_hsv(samp.rgb);
+        hsv.x = fmod(hsv.x + hoff + 90.0f, 360.0f);
+        hsv.y = min(1.0f, 0.8f + pulse * 0.2f);
+        hsv.z = min(1.0f, 0.35f + pulse * 0.65f);
+        output.write(float4(hsv_to_rgb(hsv), 1.0f), gid);
     } else {
-        output.write(float4(0.05f, 0.05f, 0.08f, 1.0f), gid); // dark bg
+        float bgV = 0.03f + bass * 0.09f + rms * 0.12f;
+        float bgH = fmod(220.0f + mid * 80.0f + air * 70.0f, 360.0f);
+        float3 bg = hsv_to_rgb(float3(bgH, 0.35f, clamp(bgV, 0.0f, 0.35f)));
+        output.write(float4(bg, 1.0f), gid);
     }
 }
 
