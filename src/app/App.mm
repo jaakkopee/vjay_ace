@@ -1233,7 +1233,7 @@ void App::syncCompositorState() {
 
 void App::processFrame() {
     midi_.poll();
-    layers_.update(60.0f);
+    layers_.update(1.0f / 60.0f);
     uploadLayers();
     syncCompositorState();
     

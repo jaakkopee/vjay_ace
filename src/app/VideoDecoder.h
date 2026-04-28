@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <filesystem>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -26,7 +27,8 @@ public:
     // Decode the next frame into outRGBA (sized outW*outH*4).
     // Loops back to start at EOF.
     // Returns false if no frame was available yet.
-    bool nextFrame(std::vector<uint8_t>& outRGBA);
+    // deltaTime: seconds elapsed since last call (used for fps-throttled sequences).
+    bool nextFrame(std::vector<uint8_t>& outRGBA, float deltaTime = 1.0f / 60.0f);
 
     bool isOpen() const { return fmtCtx_ != nullptr; }
 
@@ -52,4 +54,7 @@ private:
     bool isStatic_  = false;          // true after first EOF — single-frame file
     bool hasCached_ = false;          // true once pixelCache_ holds a valid frame
     std::vector<uint8_t> pixelCache_; // decoded RGBA pixels for static images
+    std::string concatFilePath_;      // temp ffconcat file path for image sequences (deleted on close)
+    float seqFps_         = 0.0f;     // fps for image sequence (0 = no throttle)
+    float seqFrameAccum_  = 0.0f;     // accumulated time waiting for next frame
 };

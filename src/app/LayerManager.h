@@ -22,8 +22,8 @@ public:
     bool loadMedia(int layerIdx, const std::string& path);
 
     // Decode next video frame for all active video source layers.
-    // Call once per render frame.
-    void update(float videoFps = 60.0f);
+    // Call once per render frame. deltaTime = seconds since last call.
+    void update(float deltaTime = 1.0f / 60.0f);
 
     // Raw RGBA8 pixel data for a given layer (width=WORK_W, height=WORK_H).
     // Returns nullptr if not loaded.

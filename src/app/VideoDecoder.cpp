@@ -2,6 +2,45 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
+// ── Image sequence helper ─────────────────────────────────────────────────────
+// Scans a directory for images (sorted), writes an ffconcat file so the total
+// loop duration equals targetDuration seconds. outFps receives computed fps.
+// Returns empty string on failure.
+static std::string buildConcatFile(const std::string& dir, float targetDuration, float& outFps) {
+    static const std::vector<std::string> imgExts = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif"};
+    std::vector<std::string> files;
+    for (auto& entry : fs::directory_iterator(dir)) {
+        if (!entry.is_regular_file()) continue;
+        std::string ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        for (const auto& e : imgExts)
+            if (ext == e) { files.push_back(entry.path().string()); break; }
+    }
+    if (files.empty()) return "";
+    std::sort(files.begin(), files.end());
+
+    // Compute fps so that all frames together fill targetDuration seconds.
+    outFps = static_cast<float>(files.size()) / targetDuration;
+    float frameDuration = targetDuration / static_cast<float>(files.size());
+
+    std::string concatPath = dir + "/.vjay_seq.ffconcat";
+    std::ofstream f(concatPath);
+    if (!f) return "";
+    f << "ffconcat version 1.0\n";
+    for (const auto& file : files) {
+        f << "file '" << file << "'\n";
+        f << "duration " << frameDuration << "\n";
+    }
+    // Repeat first file at end (duration 0) to avoid last-frame hang before loop
+    f << "file '" << files[0] << "'\n";
+    f << "duration 0\n";
+    return concatPath;
+}
 
 VideoDecoder::VideoDecoder() = default;
 
@@ -11,9 +50,32 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
     close();
     outW_ = outW; outH_ = outH;
 
-    if (avformat_open_input(&fmtCtx_, path.c_str(), nullptr, nullptr) < 0) {
-        std::cerr << "[VideoDecoder] Cannot open: " << path << "\n";
-        return false;
+    // If path is a directory, build an ffconcat image sequence file.
+    std::string openPath = path;
+    if (fs::is_directory(path)) {
+        float computedFps = 1.0f;
+        concatFilePath_ = buildConcatFile(path, 30.0f, computedFps);
+        if (concatFilePath_.empty()) {
+            std::cerr << "[VideoDecoder] No images found in folder: " << path << "\n";
+            return false;
+        }
+        seqFps_ = computedFps;
+        seqFrameAccum_ = 0.0f;
+        openPath = concatFilePath_;
+        const AVInputFormat* concatFmt = av_find_input_format("concat");
+        AVDictionary* opts = nullptr;
+        av_dict_set(&opts, "safe", "0", 0);
+        if (avformat_open_input(&fmtCtx_, openPath.c_str(), concatFmt, &opts) < 0) {
+            av_dict_free(&opts);
+            std::cerr << "[VideoDecoder] Cannot open concat sequence: " << openPath << "\n";
+            return false;
+        }
+        av_dict_free(&opts);
+    } else {
+        if (avformat_open_input(&fmtCtx_, openPath.c_str(), nullptr, nullptr) < 0) {
+            std::cerr << "[VideoDecoder] Cannot open: " << path << "\n";
+            return false;
+        }
     }
     if (avformat_find_stream_info(fmtCtx_, nullptr) < 0) {
         close(); return false;
@@ -87,13 +149,23 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
     return true;
 }
 
-bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
+bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA, float deltaTime) {
     if (!fmtCtx_) return false;
 
     // Static image: return cached pixels without re-decoding.
     if (isStatic_ && hasCached_) {
         outRGBA = pixelCache_;
         return true;
+    }
+
+    // Image sequence fps throttle: only advance when enough time has elapsed.
+    if (seqFps_ > 0.0f && hasCached_) {
+        seqFrameAccum_ += deltaTime;
+        if (seqFrameAccum_ < 1.0f / seqFps_) {
+            outRGBA = pixelCache_;
+            return true;
+        }
+        seqFrameAccum_ -= 1.0f / seqFps_;
     }
 
     // Loop guard: avoid spinning forever on broken/unseekable streams.
@@ -103,11 +175,19 @@ bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
     while (attempts++ < MAX_ATTEMPTS) {
         int ret = av_read_frame(fmtCtx_, packet_);
         if (ret == AVERROR_EOF) {
-            // Mark as static on first EOF — single-frame file.
-            if (hasCached_) { isStatic_ = true; outRGBA = pixelCache_; return true; }
-            // No frame decoded yet; try seeking back once.
-            if (!seekToStart()) return false;
-            continue;
+            if (!hasCached_) {
+                // No frame decoded at all — give up.
+                if (!seekToStart()) return false;
+                continue;
+            }
+            // Loop all media types (videos, concat sequences, etc.) by seeking.
+            if (seekToStart()) {
+                avcodec_flush_buffers(codecCtx_);
+                continue;
+            }
+            // Seek failed — return last cached frame.
+            outRGBA = pixelCache_;
+            return true;
         }
         if (ret < 0) return false;
         if (packet_->stream_index != streamIdx_) {
@@ -144,8 +224,8 @@ bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
         return true;
     }
 
-    // Gave up — return cached frame if available
-    if (hasCached_) { outRGBA = pixelCache_; isStatic_ = true; return true; }
+    // Gave up — return cached frame if available.
+    if (hasCached_) { outRGBA = pixelCache_; return true; }
     return false;
 }
 
@@ -167,4 +247,10 @@ void VideoDecoder::close() {
     isStatic_  = false;
     hasCached_ = false;
     pixelCache_.clear();
+    seqFps_        = 0.0f;
+    seqFrameAccum_ = 0.0f;
+    if (!concatFilePath_.empty()) {
+        std::remove(concatFilePath_.c_str());
+        concatFilePath_.clear();
+    }
 }

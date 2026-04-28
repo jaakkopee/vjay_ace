@@ -26,11 +26,11 @@ bool LayerManager::loadMedia(int layerIdx, const std::string& path) {
     return true;
 }
 
-void LayerManager::update(float /*videoFps*/) {
+void LayerManager::update(float deltaTime) {
     for (int li = 0; li < NUM_LAYERS; li += 2) {  // even = source layers
         int slot = srcSlot(li);
         if (decoders_[slot] && decoders_[slot]->isOpen())
-            decoders_[slot]->nextFrame(pixels_[li]);
+            decoders_[slot]->nextFrame(pixels_[li], deltaTime);
     }
 }
 

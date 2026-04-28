@@ -240,15 +240,20 @@ void MediaPickerWindow::render() {
 
 std::string MediaPickerWindow::nativeFilePicker() {
     __block std::string result;
-    dispatch_sync(dispatch_get_main_queue(), ^{
+    auto block = ^{
         NSOpenPanel* panel = [NSOpenPanel openPanel];
         panel.canChooseFiles          = YES;
-        panel.canChooseDirectories    = NO;
+        panel.canChooseDirectories    = YES;
         panel.allowsMultipleSelection = NO;
         // Accept all files — extension filtering is done by our scanner
         if ([panel runModal] == NSModalResponseOK && panel.URL) {
             result = panel.URL.path.UTF8String;
         }
-    });
+    };
+    if ([NSThread isMainThread]) {
+        block();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), block);
+    }
     return result;
 }
