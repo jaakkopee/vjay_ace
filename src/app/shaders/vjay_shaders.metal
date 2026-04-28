@@ -230,6 +230,209 @@ kernel void wave_distort(
     output.write(input.read(uint2(src)), gid);
 }
 
+// ── vignette ────────────────────────────────────────────────────────────────
+// float_params[0] = strength (0-1)
+// float_params[1] = radius (0-1, where 1 reaches image corners)
+kernel void vignette(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    float strength = clamp(params.float_params[0], 0.0f, 1.0f);
+    float radius = clamp(params.float_params[1], 0.05f, 1.0f);
+
+    float2 uv = (float2(gid) / float2(w, h)) * 2.0f - 1.0f;
+    uv.x *= float(w) / float(h);
+    float d = length(uv);
+    float v = smoothstep(radius, 1.25f, d);
+
+    float4 c = input.read(gid);
+    float gain = 1.0f - v * strength;
+    output.write(float4(c.rgb * gain, c.a), gid);
+}
+
+// ── ripple_distort ──────────────────────────────────────────────────────────
+// float_params[0] = amplitude(px)
+// float_params[1] = wavelength(px)
+// float_params[2] = phase(time)
+kernel void ripple_distort(
+    texture2d<float, access::sample> input  [[texture(0)]],
+    texture2d<float, access::write>  output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    float amp = params.float_params[0] + params.float_params[9] * 18.0f;
+    float wavelength = max(2.0f, params.float_params[1]);
+    float phase = params.float_params[2];
+    float2 center = float2(w, h) * 0.5f;
+    float2 p = float2(gid) - center;
+    float dist = length(p);
+    float wave = sin((dist / wavelength) * 6.28318f - phase);
+    float2 dir = dist > 0.001f ? (p / dist) : float2(0.0f);
+    float2 src = float2(gid) + dir * wave * amp;
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
+    output.write(input.sample(s, src / float2(w, h)), gid);
+}
+
+// ── lens_distortion ─────────────────────────────────────────────────────────
+// float_params[0] = strength (-1..1)
+// float_params[1] = zoom (0.5..1.5)
+kernel void lens_distortion(
+    texture2d<float, access::sample> input  [[texture(0)]],
+    texture2d<float, access::write>  output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    float strength = params.float_params[0] + params.float_params[7] * 0.35f;
+    float zoom = max(0.1f, params.float_params[1]);
+
+    float2 uv = (float2(gid) / float2(w, h)) * 2.0f - 1.0f;
+    uv /= zoom;
+    float r2 = dot(uv, uv);
+    float k = 1.0f + strength * r2;
+    float2 dst = uv * k;
+    float2 src = (dst * 0.5f + 0.5f);
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
+    output.write(input.sample(s, src), gid);
+}
+
+// ── swirl_distort ───────────────────────────────────────────────────────────
+// float_params[0] = angle magnitude (radians)
+// float_params[1] = radius (0..1)
+kernel void swirl_distort(
+    texture2d<float, access::sample> input  [[texture(0)]],
+    texture2d<float, access::write>  output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = input.get_width(), h = input.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+
+    float2 center = float2(w, h) * 0.5f;
+    float2 p = float2(gid) - center;
+    float maxR = min(float(w), float(h)) * 0.5f * clamp(params.float_params[1], 0.05f, 1.0f);
+    float d = length(p);
+
+    float2 src = float2(gid);
+    if (d < maxR) {
+        float t = 1.0f - (d / maxR);
+        float angle = (params.float_params[0] + params.float_params[11] * 3.0f) * t * t;
+        float ca = cos(angle), sa = sin(angle);
+        float2 rp = float2(ca * p.x - sa * p.y, sa * p.x + ca * p.y);
+        src = rp + center;
+    }
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
+    output.write(input.sample(s, src / float2(w, h)), gid);
+}
+
+// ── rgb_modulate ────────────────────────────────────────────────────────────
+// float_params[0] = red gain
+// float_params[1] = blue gain
+kernel void rgb_modulate(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    float rg = max(0.0f, params.float_params[0]);
+    float bg = max(0.0f, params.float_params[1]);
+    float gg = max(0.0f, 0.75f + params.float_params[7] * 1.2f);
+
+    float4 c = input.read(gid);
+    c.r *= rg;
+    c.g *= gg;
+    c.b *= bg;
+    output.write(clamp(c, 0.0f, 1.0f), gid);
+}
+
+// ── color_temperature ───────────────────────────────────────────────────────
+// float_params[0] = temperature (-1..1)
+// float_params[1] = contrast
+kernel void color_temperature(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    float t = clamp(params.float_params[0], -1.0f, 1.0f);
+    float contrast = max(0.0f, params.float_params[1]);
+    float warm = max(t, 0.0f);
+    float cool = max(-t, 0.0f);
+
+    float4 c = input.read(gid);
+    c.r *= (1.0f + warm * 0.45f);
+    c.g *= (1.0f + warm * 0.10f - cool * 0.12f);
+    c.b *= (1.0f + cool * 0.5f);
+    c.rgb = (c.rgb - 0.5f) * contrast + 0.5f;
+    output.write(clamp(c, 0.0f, 1.0f), gid);
+}
+
+// ── scanline ────────────────────────────────────────────────────────────────
+// float_params[0] = intensity (0..1)
+// float_params[1] = density   (1..8)
+// float_params[2] = time
+kernel void scanline(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    float intensity = clamp(params.float_params[0], 0.0f, 1.0f);
+    float density = max(1.0f, params.float_params[1]);
+    float t = params.float_params[2] * 8.0f;
+    float line = 0.5f + 0.5f * sin((float(gid.y) * density + t));
+    float mask = mix(1.0f - intensity, 1.0f, line);
+
+    float4 c = input.read(gid);
+    c.rgb *= mask;
+    output.write(c, gid);
+}
+
+// ── strobe_gate ─────────────────────────────────────────────────────────────
+// float_params[0] = rate (Hz)
+// float_params[1] = duty (0..1)
+// float_params[2] = time
+kernel void strobe_gate(
+    texture2d<float, access::read>  input  [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    int w = input.get_width(), h = input.get_height();
+    if (gid.x >= (uint)w || gid.y >= (uint)h) return;
+
+    float rate = max(0.01f, params.float_params[0] + params.float_params[9] * 12.0f);
+    float duty = clamp(params.float_params[1], 0.02f, 0.98f);
+    float t = params.float_params[2] * rate;
+    float phase = fract(t);
+    float gate = (phase < duty) ? 1.0f : 0.0f;
+
+    float4 c = input.read(gid);
+    output.write(float4(c.rgb * gate, c.a), gid);
+}
+
 // ── edge_ink ──────────────────────────────────────────────────────────────────
 // float_params[0]=threshold(0-1)  [1]=edge_strength
 kernel void edge_ink(

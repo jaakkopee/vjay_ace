@@ -112,7 +112,7 @@ private:
         return knobMode_;
     }
 
-    // ── 14 scene state objects — one per MIDI pad (D2…D#3) ───────────────
+    // ── Scene state objects — one per scene note in the active mapping ────
     // Each scene is the single source of truth for its knob values.
     // onKnob() writes directly here; onSceneSelect() reads from here.
     // No separate "live buffer" to sync — eliminates all sync bugs.

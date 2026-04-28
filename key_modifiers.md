@@ -41,3 +41,12 @@ When audio bypass is enabled:
 - Local/global pairs use the same base letter where possible, with `Shift+key` selecting the global version
 - These keyboard actions are polled in the control window and affect knob routing rather than triggering one-shot commands
 - Scene selection itself is currently MIDI-driven, not keyboard-driven
+
+## MIDI Scene Notes
+
+Scene triggering is mapped to note-on events:
+
+- scenes 0-15: C2 (36) to D#3 (51)
+- scenes 16-31: E3 (52) to G4 (67)
+
+The second scene bank starts at E3 (52).

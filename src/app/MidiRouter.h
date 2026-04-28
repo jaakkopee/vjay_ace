@@ -14,7 +14,7 @@
 //   CC_LAYER_KNOB_BASE + 0..5 → knob 0..5
 //
 // Special note-on messages:
-//   NOTE_SCENE_BASE + 0..15 (C2=36 … C#3=51) → scene select
+//   NOTE_SCENE_BASE + 0..31 (C2=36 … G4=67) → scene select
 //
 // Mode switching is now via keyboard keys in the control window:
 //   O held → KnobMode::LayerLevel (layer opacity)
@@ -53,7 +53,7 @@ public:
     // Called when a knob (CC) changes value. knobIdx 0–5, normValue 0.0–1.0.
     std::function<void(int knobIdx, float normValue, KnobMode mode)> onKnob;
 
-    // Called when a scene pad (D2–D#3) is pressed. sceneIdx 0–13.
+    // Called when a scene pad in the configured note window is pressed. sceneIdx 0–31.
     std::function<void(int sceneIdx)> onSceneSelect;
 
     // Called when KnobMode changes (mode-latch note pressed/released).
@@ -78,6 +78,6 @@ private:
 
     // Map a CC index to knob 0–5 (returns -1 if not a knob CC)
     static int ccToKnob(int cc);
-    // Map a note to a scene index 0–13; returns false if not a scene note
+    // Map a note to a scene index 0–31; returns false if not a scene note
     static bool noteToScene(int note, int& outSceneIdx);
 };

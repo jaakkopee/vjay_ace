@@ -90,6 +90,14 @@ bool MetalCompositor::init() {
     psoBitplane_     = makePSO(@"bitplane_reactor");
     psoLIFModulate_  = makePSO(@"lif_modulate");
     psoLIFReplace_   = makePSO(@"lif_replace");
+    psoVignette_     = makePSO(@"vignette");
+    psoRipple_       = makePSO(@"ripple_distort");
+    psoLensDistort_  = makePSO(@"lens_distortion");
+    psoSwirl_        = makePSO(@"swirl_distort");
+    psoRGBModulate_  = makePSO(@"rgb_modulate");
+    psoColorTemp_    = makePSO(@"color_temperature");
+    psoScanline_     = makePSO(@"scanline");
+    psoStrobe_       = makePSO(@"strobe_gate");
     psoPan_          = makePSO(@"pan_source");
     psoCrossfade_    = makePSO(@"crossfade_blend");
 
@@ -422,6 +430,49 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
             pso = psoLIFReplace_;
             params.float_params[0] = 0.25f + p0 * 0.75f;
             params.float_params[1] = p1;
+            params.float_params[2] = t;
+            break;
+        case FxPatchId::Vignette:
+            pso = psoVignette_;
+            params.float_params[0] = p0;               // strength
+            params.float_params[1] = 0.2f + p1 * 0.8f; // radius
+            break;
+        case FxPatchId::Ripple:
+            pso = psoRipple_;
+            params.float_params[0] = p0 * 30.0f;       // amplitude px
+            params.float_params[1] = 10.0f + p1 * 140.0f; // wavelength px
+            params.float_params[2] = t * 2.2f;         // phase
+            break;
+        case FxPatchId::LensDistort:
+            pso = psoLensDistort_;
+            params.float_params[0] = p0 * 1.2f - 0.6f; // strength -0.6..0.6
+            params.float_params[1] = 0.7f + p1 * 0.6f; // zoom
+            break;
+        case FxPatchId::Swirl:
+            pso = psoSwirl_;
+            params.float_params[0] = (p0 * 2.0f - 1.0f) * 8.0f; // angle -8..8
+            params.float_params[1] = 0.1f + p1 * 0.9f;          // radius norm
+            break;
+        case FxPatchId::RGBModulate:
+            pso = psoRGBModulate_;
+            params.float_params[0] = 0.25f + p0 * 2.0f; // red gain
+            params.float_params[1] = 0.25f + p1 * 2.0f; // blue gain
+            break;
+        case FxPatchId::ColorTemp:
+            pso = psoColorTemp_;
+            params.float_params[0] = p0 * 2.0f - 1.0f; // temperature -1..1
+            params.float_params[1] = 0.6f + p1 * 0.9f; // contrast
+            break;
+        case FxPatchId::Scanline:
+            pso = psoScanline_;
+            params.float_params[0] = p0;               // intensity
+            params.float_params[1] = 1.0f + p1 * 7.0f; // density
+            params.float_params[2] = t;
+            break;
+        case FxPatchId::Strobe:
+            pso = psoStrobe_;
+            params.float_params[0] = 0.25f + p0 * 15.0f; // rate
+            params.float_params[1] = 0.05f + p1 * 0.9f;  // duty
             params.float_params[2] = t;
             break;
     }

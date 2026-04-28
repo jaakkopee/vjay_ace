@@ -130,6 +130,14 @@ private:
     id<MTLComputePipelineState> psoBitplane_     = nil;
     id<MTLComputePipelineState> psoLIFModulate_  = nil;
     id<MTLComputePipelineState> psoLIFReplace_   = nil;
+    id<MTLComputePipelineState> psoVignette_     = nil;
+    id<MTLComputePipelineState> psoRipple_       = nil;
+    id<MTLComputePipelineState> psoLensDistort_  = nil;
+    id<MTLComputePipelineState> psoSwirl_        = nil;
+    id<MTLComputePipelineState> psoRGBModulate_  = nil;
+    id<MTLComputePipelineState> psoColorTemp_    = nil;
+    id<MTLComputePipelineState> psoScanline_     = nil;
+    id<MTLComputePipelineState> psoStrobe_       = nil;
     id<MTLComputePipelineState> psoCrossfade_    = nil;
 
     // Per-source-slot rotation textures and angles

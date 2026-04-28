@@ -1075,10 +1075,10 @@ void App::saveState() const {
         if (!f) { std::cerr << "[App] Could not open temp state file for writing\n"; return; }
         // Write magic + version for future-proofing
         const uint32_t magic = 0x56414345; // 'VACE'
-        const uint32_t ver   = 9;
+        const uint32_t ver   = 10;
         f.write(reinterpret_cast<const char*>(&magic), 4);
         f.write(reinterpret_cast<const char*>(&ver),   4);
-        // Write all 16 scene states (knobs + image paths)
+        // Write all scene states (knobs + image paths)
         for (const auto& s : scenes_) {
             for (const auto& row : s.knobs)
                 for (float v : row)
@@ -1121,6 +1121,7 @@ void App::loadState() {
     // v7: 6 modes (added ImgPan)
     // v8: per-scene image-load and scene-change crossfade speed settings
     // v9: per-scene LIF topology and neuron count settings
+    // v10: 32 scenes (added second 16-note scene bank, starts at E3)
     const bool isV3 = (ver == 3);
     const bool isV4 = (ver == 4);
     const bool isV5 = (ver == 5);
@@ -1128,12 +1129,13 @@ void App::loadState() {
     const bool isV7 = (ver == 7);
     const bool isV8 = (ver == 8);
     const bool isV9 = (ver == 9);
-    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7 && !isV8 && !isV9) {
+    const bool isV10 = (ver == 10);
+    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7 && !isV8 && !isV9 && !isV10) {
         std::cerr << "[App] Ignoring incompatible state file\n";
         return;
     }
-    // Older saves have 14 scenes; v6+ has 16. Read only what was saved.
-    const int savedSceneCount = (isV6 || isV7 || isV8 || isV9) ? NUM_SCENES : 14;
+    // Older saves have 14 or 16 scenes. v10+ saves all NUM_SCENES.
+    const int savedSceneCount = isV10 ? NUM_SCENES : (isV6 || isV7 || isV8 || isV9) ? 16 : 14;
     for (int si = 0; si < savedSceneCount && si < NUM_SCENES; ++si) {
         auto& s = scenes_[si];
         // v3=3 modes, v4=4, v5/v6=5, v7=6

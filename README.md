@@ -6,7 +6,7 @@ It combines:
 
 - 3 source layers
 - 3 GPU FX slots
-- 16 scene presets
+- 32 scene presets
 - live audio analysis
 - MIDI scene selection and knob control
 - per-scene and global override controls for opacity, audio gain, and crossfade timing
@@ -30,7 +30,7 @@ This is intended for performance use rather than offline rendering.
 
 - 3 source slots with independent media assignment
 - 3 FX slots with two parameters per FX
-- 16 MIDI-triggered scenes
+- 32 MIDI-triggered scenes
 - per-scene storage for:
   - FX params
   - local opacity
@@ -206,10 +206,13 @@ These map to knob indices 0-5.
 Scenes are selected by MIDI note-on events from:
 
 ```text
-16 scenes starting at MIDI note 36
+32 scenes starting at MIDI note 36
 ```
 
-In code, scene notes start at MIDI note 36 and cover 16 scenes.
+In code, scene notes start at MIDI note 36 and cover 32 scenes:
+
+- bank A: scene 0-15 = C2 (36) to D#3 (51)
+- bank B: scene 16-31 = E3 (52) to G4 (67)
 
 ## Keyboard Controls
 
@@ -311,6 +314,14 @@ The project currently includes these FX patch IDs:
 - Bitplane Reactor
 - LIF Modulate
 - LIF Replace
+- Vignette
+- Ripple
+- Lens Distort
+- Swirl
+- RGB Modulate
+- Color Temp
+- Scanline
+- Strobe
 
 ### Parameter Map
 
@@ -335,10 +346,20 @@ Each FX exposes up to two parameters.
 | CA Glow | Threshold | Glow Spread |
 | Bitplane Reactor | CA Rule | Threshold |
 | LIF Modulate / LIF Replace | Influence | Topology |
+| Vignette | Strength | Radius |
+| Ripple | Amplitude | Wavelength |
+| Lens Distort | Strength | Zoom |
+| Swirl | Angle | Radius |
+| RGB Modulate | Red Gain | Blue Gain |
+| Color Temp | Temperature | Contrast |
+| Scanline | Intensity | Density |
+| Strobe | Rate | Duty |
 
 ## Scene Presets
 
-Current built-in scenes:
+Current built-in scenes are split into two MIDI banks.
+
+Bank A (C2..D#3, scenes 0-15):
 
 | # | Name | FX 0 | FX 1 | FX 2 |
 |---|---|---|---|---|
@@ -358,6 +379,27 @@ Current built-in scenes:
 | 13 | Total Chaos | Video Glitch | Kaleidoscope | Bitplane Reactor |
 | 14 | Neural Pulse | LIF Modulate | Hue Cycle | Passthrough |
 | 15 | Spike Storm | LIF Replace | Kaleidoscope | Video Glitch |
+
+Bank B (E3..G4, scenes 16-31):
+
+| # | Name | FX 0 | FX 1 | FX 2 |
+|---|---|---|---|---|
+| 16 | Noise Warp Loop | Ripple | Feedback Zoom | Video Glitch |
+| 17 | Audio Kaleido Hue | Kaleidoscope | Hue Cycle | RGB Modulate |
+| 18 | Julia Glitch | Julia Fractal | Video Glitch | Scanline |
+| 19 | Physarum Echo | Scanline | Feedback Zoom | Hue Cycle |
+| 20 | Reactor Bloom | Bitplane Reactor | CA Glow | Vignette |
+| 21 | Quilt Ink | Circle Quilt | Edge Ink | Color Temp |
+| 22 | Waveform Shear | Ripple | Pixelate | Chromatic Aberr |
+| 23 | Triplet Strobe | Strobe | Kaleidoscope | Feedback Zoom |
+| 24 | Diffuse Bloom | Vignette | CA Glow | Color Temp |
+| 25 | Lens Swirl | Lens Distort | Swirl | Feedback Zoom |
+| 26 | Neon Contour | Vignette | Edge Ink | CA Glow |
+| 27 | Mirror Shatter | Kaleidoscope | Pixelate | Lens Distort |
+| 28 | Diffuse Reactor | Bitplane Reactor | Blur | Swirl |
+| 29 | Fractal Displacer | Julia Fractal | Lens Distort | Feedback Zoom |
+| 30 | Psy Modulator | RGB Modulate | Hue Cycle | Video Glitch |
+| 31 | Shadow Morph | Edge Ink | Blur | Strobe |
 
 ## Project Structure
 
