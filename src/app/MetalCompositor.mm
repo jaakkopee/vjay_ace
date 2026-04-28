@@ -638,6 +638,7 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
             ShaderParams pp{};
             pp.float_params[0] = panX_[slot];
             pp.float_params[1] = panY_[slot];
+            pp.float_params[2] = zooms_[slot];
             id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
             dispatch(enc, psoPan_, zoomTex_[slot], panTex_[slot], pp);
             [enc endEncoding];

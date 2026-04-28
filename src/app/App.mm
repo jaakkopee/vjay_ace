@@ -1103,7 +1103,7 @@ void App::saveState() const {
         std::cerr << "[App] Could not rename temp state file to " << statePath() << "\n";
         return;
     }
-    std::cout << "[App] State saved (scene=" << currentScene_ << ")\n";
+    std::cout << "[App] State saved (scene=" << currentScene_ << ")" << std::endl;
 }
 
 void App::loadState() {
@@ -1190,7 +1190,7 @@ void App::loadState() {
         ensureSceneTransformDefaults(currentScene_);
         applySceneToEngine(currentScene_);
     }
-    std::cout << "[App] State restored from " << statePath() << "\n";
+    std::cout << "[App] State restored from " << statePath() << std::endl;
 }
 
 // ── Per-frame ─────────────────────────────────────────────────────────────────
@@ -1253,7 +1253,9 @@ void App::run() {
         controlWin_.render(compositeTex_);
         if (mediaPickerWin_.isOpen()) mediaPickerWin_.render();
     }
+    std::cerr << "[App] Shutdown requested; saving state...\n";
     saveState();
+    std::cerr << "[App] Shutdown save completed\n";
     controlWin_.close();
     perfWin_.close();
 }
