@@ -35,6 +35,7 @@ struct SceneState {
     std::array<uint32_t, NUM_SRC_LAYERS> imageCrossfadeVersion;
     std::array<uint32_t, NUM_SRC_LAYERS> sceneCrossfadeVersion;
     std::array<uint32_t, NUM_FX_LAYERS> opacityVersion;
+    std::array<uint32_t, NUM_FX_LAYERS> audioGainVersion;
     int lifTopologyIndex = -1;
     int lifNeuronCount = 0;
 
@@ -46,6 +47,7 @@ struct SceneState {
         imageCrossfadeVersion.fill(0);
         sceneCrossfadeVersion.fill(0);
         opacityVersion.fill(0);
+        audioGainVersion.fill(0);
         lifTopologyIndex = -1;
         lifNeuronCount = 0;
     }
@@ -94,6 +96,7 @@ private:
     bool     iKeyHeld_  = false;  // I held → global image-load crossfade override
     bool     sKeyHeld_  = false;  // S held → global scene-change crossfade override
     bool     lKeyHeld_  = false;  // L held → global opacity override mode
+    bool     hKeyHeld_  = false;  // H held → global audio gain override mode
     bool     nKeyHeld_  = false;  // N held → LIF neuron count mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
@@ -103,6 +106,7 @@ private:
         if (zKeyHeld_) return KnobMode::ImgZoom;
         if (oKeyHeld_) return KnobMode::LayerLevel;
         if (lKeyHeld_) return KnobMode::LayerLevel;
+        if (hKeyHeld_) return KnobMode::FxAudio;
         if (gKeyHeld_) return KnobMode::FxAudio;
         if (pKeyHeld_) return KnobMode::ImgPan;
         return knobMode_;
@@ -123,6 +127,8 @@ private:
     std::array<uint32_t, NUM_SRC_LAYERS> globalSceneCrossfadeVersion_ = {0, 0, 0};
     std::array<float, NUM_FX_LAYERS> globalOpacityNorm_ = {1.0f, 1.0f, 1.0f};
     std::array<uint32_t, NUM_FX_LAYERS> globalOpacityVersion_ = {0, 0, 0};
+    std::array<float, NUM_FX_LAYERS> globalAudioGainNorm_ = {0.125f, 0.125f, 0.125f};
+    std::array<uint32_t, NUM_FX_LAYERS> globalAudioGainVersion_ = {0, 0, 0};
 
     // Pan/zoom animation state (when changing scenes)
     bool panZoomAnimating_ = false;
@@ -160,6 +166,7 @@ private:
     // Ensure transform modes have explicit per-scene neutral defaults.
     void ensureSceneTransformDefaults(int idx);
     void ensureSceneOpacityDefaults(int idx);
+    void ensureSceneAudioGainDefaults(int idx);
     void ensureSceneLIFDefaults(int idx);
     void applySceneCrossfadeSettings(int idx);
     float effectiveImageCrossfadeNorm(int sceneIdx, int slot) const;
@@ -167,6 +174,9 @@ private:
     float effectiveLayerOpacityNorm(int sceneIdx, int slot) const;
     void setLocalLayerOpacityNorm(int sceneIdx, int slot, float norm);
     void setGlobalLayerOpacityNorm(int slot, float norm);
+    float effectiveAudioGainNorm(int sceneIdx, int slot) const;
+    void setLocalAudioGainNorm(int sceneIdx, int slot, float norm);
+    void setGlobalAudioGainNorm(int slot, float norm);
     void setLocalImageCrossfadeNorm(int sceneIdx, int slot, float norm);
     void setLocalSceneCrossfadeNorm(int sceneIdx, int slot, float norm);
     void setGlobalImageCrossfadeNorm(int slot, float norm);

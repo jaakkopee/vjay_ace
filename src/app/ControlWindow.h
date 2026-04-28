@@ -86,6 +86,9 @@ public:
     // Fired when the L key is pressed (true) or released (false) → global opacity override mode
     std::function<void(bool pressed)> onLKey;
 
+    // Fired when the H key is pressed (true) or released (false) → global audio gain override mode
+    std::function<void(bool pressed)> onHKey;
+
     // Fired when the N key is pressed (true) or released (false) → LIF neuron count mode
     std::function<void(bool pressed)> onNKey;
 
@@ -132,6 +135,7 @@ private:
     bool iKeyWas_ = false;
     bool sKeyWas_ = false;
     bool lKeyWas_ = false;
+    bool hKeyWas_ = false;
     bool nKeyWas_ = false;
     bool bKeyWas_ = false;
     bool audioBypassed_ = false;
