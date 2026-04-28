@@ -1045,11 +1045,6 @@ void App::onImageSelected(int slotIdx, const std::string& path) {
         scenes_[currentScene_].imgPaths[slotIdx] = path;
         compositor_.setCrossfadeSpeed(slotIdx,
                                       0.1f + effectiveImageCrossfadeNorm(currentScene_, slotIdx) * 7.9f);
-    } else {
-        // No scene active yet — store in every scene for this slot so currently
-        // selected media is never lost on save/load when no scene has been picked.
-        for (auto& s : scenes_)
-            s.imgPaths[slotIdx] = path;
     }
     // Reloading the exact same file should reset playback in that slot.
     // Only use visual crossfade when the incoming path differs.
@@ -1091,16 +1086,7 @@ void App::saveState() const {
             f.write(reinterpret_cast<const char*>(&s.lifTopologyIndex), sizeof(int));
             f.write(reinterpret_cast<const char*>(&s.lifNeuronCount), sizeof(int));
             // Write 3 image paths as length-prefixed strings.
-            // If a scene slot is empty, fall back to the currently loaded media path
-            // in that source layer so close/reopen doesn't drop visible media.
-            std::array<std::string, NUM_SRC_LAYERS> persistedPaths = s.imgPaths;
-            for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
-                if (persistedPaths[slot].empty()) {
-                    const std::string& livePath = layers_.state(slot * 2).mediaPath;
-                    if (!livePath.empty()) persistedPaths[slot] = livePath;
-                }
-            }
-            for (const auto& p : persistedPaths) {
+            for (const auto& p : s.imgPaths) {
                 uint32_t len = static_cast<uint32_t>(p.size());
                 f.write(reinterpret_cast<const char*>(&len), sizeof(len));
                 if (len) f.write(p.data(), len);
@@ -1153,13 +1139,13 @@ void App::loadState() {
         for (int mi = 0; mi < savedModes; ++mi)
             for (float& v : s.knobs[mi])
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
-        if (isV8 || isV9) {
+        if (isV8 || isV9 || isV10) {
             for (float& v : s.imageCrossfadeSpeedNorm)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
             for (float& v : s.sceneCrossfadeSpeedNorm)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
         }
-        if (isV9) {
+        if (isV9 || isV10) {
             if (!f.read(reinterpret_cast<char*>(&s.lifTopologyIndex), sizeof(int))) return;
             if (!f.read(reinterpret_cast<char*>(&s.lifNeuronCount), sizeof(int))) return;
         }
