@@ -892,8 +892,12 @@ kernel void rotate_source(
     float srcX = cosA * dx + sinA * dy + cx;
     float srcY = -sinA * dx + cosA * dy + cy;
 
-    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
     float2 uv = float2(srcX / float(w), srcY / float(h));
+    if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f) {
+        output.write(float4(0.0f, 0.0f, 0.0f, 0.0f), gid);
+        return;
+    }
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
     output.write(input.sample(s, uv), gid);
 }
 
@@ -945,7 +949,7 @@ kernel void crossfade_blend(
 // float_params[0] = panX  (-1.0 = max left,  0.0 = centre, +1.0 = max right)
 // float_params[1] = panY  (-1.0 = max up,    0.0 = centre, +1.0 = max down)
 // float_params[2] = zoom factor used by zoom_source pre-pass
-// Pan amount is constrained by zoom so we keep sampling inside valid image bounds.
+// Pan amount is bounded and zoom-aware to avoid hard out-of-bounds cropping.
 kernel void pan_source(
     texture2d<float, access::sample> input  [[texture(0)]],
     texture2d<float, access::write>  output [[texture(1)]],
@@ -957,10 +961,10 @@ kernel void pan_source(
 
     float zoom = max(params.float_params[2], 0.001f);
 
-    // Maximum safe normalized offset after zoom, so pan does not crop out of bounds.
-    // For zoom<=1 this becomes 0 (no safe pan without exposing outside area).
-    float maxOffsetX = max(0.0f, 0.5f - 0.5f / zoom);
-    float maxOffsetY = max(0.0f, 0.5f - 0.5f / zoom);
+    // Keep pan responsive even at zoom=1 while staying in a conservative range.
+    float baseOffset = 0.18f;
+    float maxOffsetX = baseOffset / max(zoom, 1.0f);
+    float maxOffsetY = baseOffset / max(zoom, 1.0f);
 
     float panX = clamp(params.float_params[0], -1.0f, 1.0f) * maxOffsetX;
     float panY = clamp(params.float_params[1], -1.0f, 1.0f) * maxOffsetY;
@@ -968,9 +972,14 @@ kernel void pan_source(
     // Inverse map in normalized UV space.
     float2 uv = (float2(gid) + 0.5f) / float2(w, h);
     float2 srcUV = uv - float2(panX, panY);
-    srcUV = clamp(srcUV, 0.0f, 1.0f);
 
-    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
+    // Hard OOB reject avoids repeating border-line artifacts completely.
+    if (srcUV.x < 0.0f || srcUV.x > 1.0f || srcUV.y < 0.0f || srcUV.y > 1.0f) {
+        output.write(float4(0.0f, 0.0f, 0.0f, 1.0f), gid);
+        return;
+    }
+
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
     output.write(input.sample(s, srcUV), gid);
 }
 

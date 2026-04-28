@@ -67,6 +67,7 @@ public:
 private:
     std::unique_ptr<RtMidiIn> midiIn_;
     KnobMode mode_ = KnobMode::FxParam;
+    std::array<int, NUM_KNOBS> learnedKnobCcs_ = {-1, -1, -1, -1, -1, -1};
 
     // Thread-safe ring buffer for callbacks from MIDI thread → main thread
     struct PendingEvent { std::vector<unsigned char> bytes; double deltaTime; };
@@ -76,8 +77,8 @@ private:
     static void rtCallback(double dt, std::vector<unsigned char>* msg, void* ud);
     void processEvent(const std::vector<unsigned char>& msg);
 
-    // Map a CC index to knob 0–5 (returns -1 if not a knob CC)
-    static int ccToKnob(int cc);
+    // Map a CC index to knob 0–5. Uses fixed mapping first, then learned mapping.
+    int ccToKnob(int cc);
     // Map a note to a scene index 0–31; returns false if not a scene note
     static bool noteToScene(int note, int& outSceneIdx);
 };

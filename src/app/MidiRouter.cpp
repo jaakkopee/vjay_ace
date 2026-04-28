@@ -22,6 +22,7 @@ bool MidiRouter::openPort(int index) {
         midiIn_->openPort(static_cast<unsigned int>(index));
         midiIn_->ignoreTypes(false, false, false);
         midiIn_->setCallback(&MidiRouter::rtCallback, this);
+        learnedKnobCcs_.fill(-1);
         return true;
     } catch (RtMidiError& e) {
         std::cerr << "[MidiRouter] " << e.getMessage() << "\n";
@@ -103,7 +104,26 @@ void MidiRouter::processEvent(const std::vector<unsigned char>& msg) {
 // ── mapping helpers ───────────────────────────────────────────────────────────
 
 int MidiRouter::ccToKnob(int cc) {
-    return ccToKnobIndex(cc);
+    // 1) Prefer explicit fixed mapping from Constants.h.
+    int fixed = ccToKnobIndex(cc);
+    if (fixed >= 0) return fixed;
+
+    // 2) If this CC was learned before, reuse it.
+    for (int i = 0; i < NUM_KNOBS; ++i)
+        if (learnedKnobCcs_[i] == cc)
+            return i;
+
+    // 3) Learn first unseen CC into next free knob slot.
+    for (int i = 0; i < NUM_KNOBS; ++i) {
+        if (learnedKnobCcs_[i] < 0) {
+            learnedKnobCcs_[i] = cc;
+            std::cerr << "[MidiRouter] Learned knob CC " << cc << " -> knob " << i << "\n";
+            return i;
+        }
+    }
+
+    // 4) Already learned 6 CCs and this one is unknown.
+    return -1;
 }
 
 bool MidiRouter::noteToScene(int note, int& outSceneIdx) {

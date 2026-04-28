@@ -709,8 +709,9 @@ void App::refreshKnobDisplay() {
 void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     knobLastPhys_[knobIdx] = normValue;
 
-    // If no scene is active there's nothing to store or apply.
-    if (currentScene_ < 0) return;
+    // Ensure there is an active scene so incoming MIDI always has a target.
+    if (currentScene_ < 0)
+        onSceneSelect(0);
 
     // If a modifier key is held, override to its mode
     KnobMode effectiveMod = effectiveMode();
@@ -1013,14 +1014,15 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         return;
     }
 
-    int mi = static_cast<int>(knobMode_);
+    KnobMode eff = effectiveMode();
+    int mi = static_cast<int>(eff);
     // GUI drag bypasses pickup: write directly to scene and sync physical tracker.
-    if (knobMode_ == KnobMode::LayerLevel && knobIdx % 2 == 0)
+    if (eff == KnobMode::LayerLevel && knobIdx % 2 == 0)
         setLocalLayerOpacityNorm(currentScene_, knobIdx / 2, normValue);
-    if (knobMode_ == KnobMode::FxAudio && knobIdx % 2 == 0)
+    if (eff == KnobMode::FxAudio && knobIdx % 2 == 0)
         setLocalAudioGainNorm(currentScene_, knobIdx / 2, normValue);
     scenes_[currentScene_].knobs[mi][knobIdx] = normValue;
-    if (knobMode_ == KnobMode::FxParam && (knobIdx % 2 == 1)) {
+    if (eff == KnobMode::FxParam && (knobIdx % 2 == 1)) {
         int slot = knobIdx / 2;
         if (slot < NUM_FX_LAYERS && isLIFPatch(SCENES[currentScene_].fx[slot])) {
             scenes_[currentScene_].lifTopologyIndex = topologyIndexFromNorm(normValue);
@@ -1028,7 +1030,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         }
     }
     knobLastPhys_[knobIdx] = normValue;
-    applyKnob(knobIdx, normValue, knobMode_);
+    applyKnob(knobIdx, normValue, eff);
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
 
@@ -1044,11 +1046,10 @@ void App::onImageSelected(int slotIdx, const std::string& path) {
         compositor_.setCrossfadeSpeed(slotIdx,
                                       0.1f + effectiveImageCrossfadeNorm(currentScene_, slotIdx) * 7.9f);
     } else {
-        // No scene active yet — store in every scene that has no image for this slot
-        // so the image persists regardless of which scene is selected first.
+        // No scene active yet — store in every scene for this slot so currently
+        // selected media is never lost on save/load when no scene has been picked.
         for (auto& s : scenes_)
-            if (s.imgPaths[slotIdx].empty())
-                s.imgPaths[slotIdx] = path;
+            s.imgPaths[slotIdx] = path;
     }
     // Reloading the exact same file should reset playback in that slot.
     // Only use visual crossfade when the incoming path differs.
@@ -1089,8 +1090,17 @@ void App::saveState() const {
                 f.write(reinterpret_cast<const char*>(&v), sizeof(float));
             f.write(reinterpret_cast<const char*>(&s.lifTopologyIndex), sizeof(int));
             f.write(reinterpret_cast<const char*>(&s.lifNeuronCount), sizeof(int));
-            // Write 3 image paths as length-prefixed strings
-            for (const auto& p : s.imgPaths) {
+            // Write 3 image paths as length-prefixed strings.
+            // If a scene slot is empty, fall back to the currently loaded media path
+            // in that source layer so close/reopen doesn't drop visible media.
+            std::array<std::string, NUM_SRC_LAYERS> persistedPaths = s.imgPaths;
+            for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
+                if (persistedPaths[slot].empty()) {
+                    const std::string& livePath = layers_.state(slot * 2).mediaPath;
+                    if (!livePath.empty()) persistedPaths[slot] = livePath;
+                }
+            }
+            for (const auto& p : persistedPaths) {
                 uint32_t len = static_cast<uint32_t>(p.size());
                 f.write(reinterpret_cast<const char*>(&len), sizeof(len));
                 if (len) f.write(p.data(), len);
