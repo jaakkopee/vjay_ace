@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <csignal>
+#include <filesystem>
 
 // ── Signal handling: save state on Ctrl-C / kill ─────────────────────────────
 static App* g_sigApp = nullptr;
@@ -100,8 +101,20 @@ bool App::init() {
     // ── Media picker window — small panel on primary screen ──────────────
     // Position it below or beside the control window
     const std::string stashRoot = []{
-        const char* home = getenv("HOME");
-        return home ? std::string(home) + "/Documents/koodii/vjay_ace/Heikki_stash" : "";
+        std::error_code ec;
+
+        if (const char* home = getenv("HOME")) {
+            const std::string stashCandidate = std::string(home) + "/Documents/koodii/vjay_ace/Heikki_stash";
+            if (std::filesystem::exists(stashCandidate, ec) && std::filesystem::is_directory(stashCandidate, ec))
+                return stashCandidate;
+        }
+
+        NSString* exeDir = [NSBundle mainBundle].executablePath.stringByDeletingLastPathComponent;
+        const std::filesystem::path imagesCandidate = std::filesystem::path(exeDir.UTF8String).parent_path() / "images";
+        if (std::filesystem::exists(imagesCandidate, ec) && std::filesystem::is_directory(imagesCandidate, ec))
+            return imagesCandidate.string();
+
+        return std::string();
     }();
     // Open picker as a smaller overlay on the same screen
     mediaPickerWin_.open(ctrl.x + ctrlS.x / 2, ctrl.y,
