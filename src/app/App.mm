@@ -422,8 +422,10 @@ void App::ensureSceneOpacityDefaults(int idx) {
     const int layerMi = static_cast<int>(KnobMode::LayerLevel);
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
         const int knob = slot * 2;
+        // Scene 0 (Fade to Black) defaults to opacity 0; all other scenes default to 1.
+        const float defaultOpacity = (idx == 0) ? 0.0f : 1.0f;
         if (s.knobs[layerMi][knob] < 0.0f)
-            s.knobs[layerMi][knob] = 1.0f;
+            s.knobs[layerMi][knob] = defaultOpacity;
         if (s.opacityVersion[slot] == 0)
             s.opacityVersion[slot] = globalOpacityVersion_[slot];
     }
@@ -573,8 +575,11 @@ void App::applySceneToEngine(int idx) {
     const SceneState& s = scenes_[idx];
 
     // Layer opacity is scene-local by default and can be globally overridden.
-    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot)
-        applyKnob(slot * 2, effectiveLayerOpacityNorm(idx, slot), KnobMode::LayerLevel);
+    // Skip when a pan/zoom/opacity animation is running — it will set opacity each frame.
+    if (!panZoomAnimating_) {
+        for (int slot = 0; slot < NUM_FX_LAYERS; ++slot)
+            applyKnob(slot * 2, effectiveLayerOpacityNorm(idx, slot), KnobMode::LayerLevel);
+    }
 
     // Audio gain is scene-local by default and can be globally overridden.
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot)
@@ -582,6 +587,10 @@ void App::applySceneToEngine(int idx) {
 
     for (int mi = 0; mi < SceneState::NMODES; ++mi) {
         if (mi == static_cast<int>(KnobMode::LayerLevel) || mi == static_cast<int>(KnobMode::FxAudio)) continue;
+        // Skip pan/zoom/rotate when animating — the animation sets them each frame.
+        if (panZoomAnimating_ && (mi == static_cast<int>(KnobMode::ImgPan) ||
+                                  mi == static_cast<int>(KnobMode::ImgZoom) ||
+                                  mi == static_cast<int>(KnobMode::ImgRotate))) continue;
         auto mode = static_cast<KnobMode>(mi);
         for (int k = 0; k < NUM_KNOBS; ++k) {
             if (s.knobs[mi][k] >= 0.0f)
@@ -837,6 +846,14 @@ void App::startPanZoomAnimation() {
         zoomTo_[slot] = zoomNorm >= 0.0f ? std::pow(64.0f, zoomNorm - 0.5f) : 1.0f;
     }
     
+    // Capture opacity from/to for each FX layer.
+    const int layerMi = static_cast<int>(KnobMode::LayerLevel);
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+        opacityFrom_[slot] = layers_.state(slot * 2 + 1).opacity;
+        float opNorm = scenes_[currentScene_].knobs[layerMi][slot * 2];
+        opacityTo_[slot] = (opNorm >= 0.0f) ? opNorm : effectiveLayerOpacityNorm(currentScene_, slot);
+    }
+    
     panZoomAnimTime_ = 0.0f;
     panZoomAnimating_ = true;
 }
@@ -863,6 +880,13 @@ void App::updatePanZoomAnimation(float deltaTime) {
         compositor_.setLayerPanX(slot, panX);
         compositor_.setLayerPanY(slot, panY);
         compositor_.setLayerZoom(slot, zoom);
+    }
+    
+    // Animate FX layer opacities.
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+        float opacity = opacityFrom_[slot] + (opacityTo_[slot] - opacityFrom_[slot]) * eased;
+        layers_.setOpacity(slot * 2 + 1, opacity);
+        compositor_.setLayerOpacity(slot * 2 + 1, opacity);
     }
 }
 

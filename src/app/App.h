@@ -137,6 +137,7 @@ private:
     std::array<float, NUM_SRC_LAYERS> panXFrom_, panXTo_;
     std::array<float, NUM_SRC_LAYERS> panYFrom_, panYTo_;
     std::array<float, NUM_SRC_LAYERS> zoomFrom_, zoomTo_;
+    std::array<float, NUM_FX_LAYERS>  opacityFrom_, opacityTo_;
     void startPanZoomAnimation();
     void updatePanZoomAnimation(float deltaTime);
 

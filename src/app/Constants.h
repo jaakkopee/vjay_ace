@@ -226,8 +226,8 @@ struct Scene {
 
 // 32 scene presets across two 16-note banks.
 inline constexpr Scene SCENES[NUM_SCENES] = {
-    // 00  C2   – bare pass-through, all layers visible
-    { "Pass-Through",
+    // 00  C2   – fade to black (opacity 0, zoom/pan neutral)
+    { "Fade to Black",
       { FxPatchId::Passthrough, FxPatchId::Passthrough, FxPatchId::Passthrough },
       { {0.5f,0.5f}, {0.5f,0.5f}, {0.5f,0.5f} } },
 
