@@ -41,9 +41,16 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     modeLabel_->getRenderer()->setTextColor(TEXT_DIM);
     gui_.add(modeLabel_);
 
+    // ── Shift-lock label ─────────────────────────────────────────────────────
+    shiftLockLabel_ = tgui::Label::create("Shift Lock: Off");
+    shiftLockLabel_->setPosition(14, 70);
+    shiftLockLabel_->setTextSize(13);
+    shiftLockLabel_->getRenderer()->setTextColor(TEXT_DIM);
+    gui_.add(shiftLockLabel_);
+
     // ── 6 knobs: 2 rows × 3 columns ─────────────────────────────────────────────────
-    // Row 0 (knobs 0-2): y=96;  row 1 (knobs 3-5): y=96+KNOB_SIZE+90
-    const int rowYBase[2] = { 96, 96 + KNOB_SIZE + 90 };
+    // Row 0 (knobs 0-2): y=112; row 1 (knobs 3-5): y=112+KNOB_SIZE+90
+    const int rowYBase[2] = { 112, 112 + KNOB_SIZE + 90 };
 
     for (int i = 0; i < NUM_KNOBS; ++i) {
         auto& ks        = knobs_[i];
@@ -80,7 +87,7 @@ void ControlWindow::buildGui(int width, int /*height*/) {
 
     // ── Audio level meter canvas ──────────────────────────────────────────────
     // Placed below the knob grid, spanning the left panel.
-    const int meterY = 96 + KNOB_SIZE + 90 + KNOB_SIZE + 70;  // below row-1 value labels
+    const int meterY = 112 + KNOB_SIZE + 90 + KNOB_SIZE + 70;  // below row-1 value labels
     const int meterH = 80;
 
     auto meterLabel = tgui::Label::create("AUDIO");
@@ -229,31 +236,82 @@ bool ControlWindow::handleEvents() {
 }
 
 void ControlWindow::update() {
-    // Poll R, Z, O, G, P, F, C, I, S, L, H, N key state each frame — robust against TGUI consuming key events.
+    // Poll modifier-aware key states each frame — robust against TGUI consuming key events.
+    // Local controls use first-letter key, global uses Shift+same key.
     bool rNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R);
     bool zNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z);
-    bool oNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::O);
-    bool gNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::G);
+    bool rawShiftNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)
+                    || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RShift);
+
+    if (rawShiftNow && !rawShiftWas_) {
+        auto now = std::chrono::steady_clock::now();
+        if (lastShiftPressTime_ != std::chrono::steady_clock::time_point::min()) {
+            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastShiftPressTime_).count();
+            if (dt <= 200) {
+                shiftLockEnabled_ = !shiftLockEnabled_;
+                lastShiftPressTime_ = std::chrono::steady_clock::time_point::min();
+            } else {
+                lastShiftPressTime_ = now;
+            }
+        } else {
+            lastShiftPressTime_ = now;
+        }
+    }
+    rawShiftWas_ = rawShiftNow;
+
+    bool shiftNow = rawShiftNow || shiftLockEnabled_;
+    bool oRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::O);
+    bool gRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::G);
+    bool xRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X);
+    bool cRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C);
+
+    bool oNow = oRaw && !shiftNow;         // local opacity
+    bool globalOpacityNow = oRaw && shiftNow;
+    bool gNow = gRaw && !shiftNow;         // local audio gain
+    bool globalAudioGainNow = gRaw && shiftNow;
+    bool imgXfadeNow = xRaw && !shiftNow;
+    bool globalImgXfadeNow = xRaw && shiftNow;
+    bool sceneXfadeNow = cRaw && !shiftNow;
+    bool globalSceneXfadeNow = cRaw && shiftNow;
+
     bool pNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::P);
-    bool fNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F);
-    bool cNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C);
-    bool iNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::I);
-    bool sNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S);
-    bool lNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::L);
-    bool hNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::H);
     bool nNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::N);
     bool bNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::B);
+
+    if (shiftLockLabel_) {
+        shiftLockLabel_->setText(std::string("Shift Lock: ") + (shiftLockEnabled_ ? "On" : "Off"));
+        shiftLockLabel_->getRenderer()->setTextColor(shiftLockEnabled_ ? tgui::Color(255, 210, 80) : TEXT_DIM);
+    }
+
     if (rNow != rKeyWas_) { rKeyWas_ = rNow; if (onRKey) onRKey(rNow); }
     if (zNow != zKeyWas_) { zKeyWas_ = zNow; if (onZKey) onZKey(zNow); }
     if (oNow != oKeyWas_) { oKeyWas_ = oNow; if (onOKey) onOKey(oNow); }
     if (gNow != gKeyWas_) { gKeyWas_ = gNow; if (onGKey) onGKey(gNow); }
     if (pNow != pKeyWas_) { pKeyWas_ = pNow; if (onPKey) onPKey(pNow); }
-    if (fNow != fKeyWas_) { fKeyWas_ = fNow; if (onFKey) onFKey(fNow); }
-    if (cNow != cKeyWas_) { cKeyWas_ = cNow; if (onCKey) onCKey(cNow); }
-    if (iNow != iKeyWas_) { iKeyWas_ = iNow; if (onIKey) onIKey(iNow); }
-    if (sNow != sKeyWas_) { sKeyWas_ = sNow; if (onSKey) onSKey(sNow); }
-    if (lNow != lKeyWas_) { lKeyWas_ = lNow; if (onLKey) onLKey(lNow); }
-    if (hNow != hKeyWas_) { hKeyWas_ = hNow; if (onHKey) onHKey(hNow); }
+    if (imgXfadeNow != imgXfadeKeyWas_) {
+        imgXfadeKeyWas_ = imgXfadeNow;
+        if (onImgXfadeKey) onImgXfadeKey(imgXfadeNow);
+    }
+    if (sceneXfadeNow != sceneXfadeKeyWas_) {
+        sceneXfadeKeyWas_ = sceneXfadeNow;
+        if (onSceneXfadeKey) onSceneXfadeKey(sceneXfadeNow);
+    }
+    if (globalImgXfadeNow != globalImgXfadeKeyWas_) {
+        globalImgXfadeKeyWas_ = globalImgXfadeNow;
+        if (onGlobalImgXfadeKey) onGlobalImgXfadeKey(globalImgXfadeNow);
+    }
+    if (globalSceneXfadeNow != globalSceneXfadeKeyWas_) {
+        globalSceneXfadeKeyWas_ = globalSceneXfadeNow;
+        if (onGlobalSceneXfadeKey) onGlobalSceneXfadeKey(globalSceneXfadeNow);
+    }
+    if (globalOpacityNow != globalOpacityKeyWas_) {
+        globalOpacityKeyWas_ = globalOpacityNow;
+        if (onGlobalOpacityKey) onGlobalOpacityKey(globalOpacityNow);
+    }
+    if (globalAudioGainNow != globalAudioGainKeyWas_) {
+        globalAudioGainKeyWas_ = globalAudioGainNow;
+        if (onGlobalAudioGainKey) onGlobalAudioGainKey(globalAudioGainNow);
+    }
     if (nNow != nKeyWas_) { nKeyWas_ = nNow; if (onNKey) onNKey(nNow); }
     // B key: toggle bypass on rising edge (key-down event)
     if (bNow && !bKeyWas_) {

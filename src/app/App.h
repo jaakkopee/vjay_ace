@@ -88,15 +88,15 @@ private:
     KnobMode knobMode_  = KnobMode::FxParam;
     bool     rKeyHeld_  = false;  // R held → ImgRotate overrides knobMode_
     bool     zKeyHeld_  = false;  // Z held → ImgZoom overrides knobMode_
-    bool     oKeyHeld_  = false;  // O held → LayerLevel mode
-    bool     gKeyHeld_  = false;  // G held → FxAudio mode
+    bool     oKeyHeld_  = false;  // O held (no Shift) → local LayerLevel mode
+    bool     gKeyHeld_  = false;  // G held (no Shift) → local FxAudio mode
     bool     pKeyHeld_  = false;  // P held → ImgPan mode
-    bool     fKeyHeld_  = false;  // F held → crossfade speed mode
-    bool     cKeyHeld_  = false;  // C held → scene-change crossfade speed mode
-    bool     iKeyHeld_  = false;  // I held → global image-load crossfade override
-    bool     sKeyHeld_  = false;  // S held → global scene-change crossfade override
-    bool     lKeyHeld_  = false;  // L held → global opacity override mode
-    bool     hKeyHeld_  = false;  // H held → global audio gain override mode
+    bool     imgXfadeKeyHeld_         = false;  // I held (no Shift) → local image crossfade speed mode
+    bool     sceneXfadeKeyHeld_       = false;  // S held (no Shift) → local scene crossfade speed mode
+    bool     globalImgXfadeKeyHeld_   = false;  // Shift+I held → global image-load crossfade override
+    bool     globalSceneXfadeKeyHeld_ = false;  // Shift+S held → global scene-change crossfade override
+    bool     globalOpacityKeyHeld_    = false;  // Shift+O held → global opacity override mode
+    bool     globalAudioGainKeyHeld_  = false;  // Shift+G held → global audio gain override mode
     bool     nKeyHeld_  = false;  // N held → LIF neuron count mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
@@ -105,8 +105,8 @@ private:
         if (rKeyHeld_) return KnobMode::ImgRotate;
         if (zKeyHeld_) return KnobMode::ImgZoom;
         if (oKeyHeld_) return KnobMode::LayerLevel;
-        if (lKeyHeld_) return KnobMode::LayerLevel;
-        if (hKeyHeld_) return KnobMode::FxAudio;
+        if (globalOpacityKeyHeld_) return KnobMode::LayerLevel;
+        if (globalAudioGainKeyHeld_) return KnobMode::FxAudio;
         if (gKeyHeld_) return KnobMode::FxAudio;
         if (pKeyHeld_) return KnobMode::ImgPan;
         return knobMode_;

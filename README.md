@@ -1,260 +1,438 @@
 # vjay_ace
 
-Real-time GPU VJ compositor for live performance on macOS / Apple Silicon.  
-Three source layers, three FX layers, 16 scenes, 6 MIDI knobs.
+`vjay_ace` is a live-performance VJ compositor for macOS on Apple Silicon.
 
----
+It combines:
 
-## Requirements
+- 3 source layers
+- 3 GPU FX slots
+- 16 scene presets
+- live audio analysis
+- MIDI scene selection and knob control
+- per-scene and global override controls for opacity, audio gain, and crossfade timing
 
-| Dependency | Version |
-|---|---|
-| macOS | 13+ (Metal 3) |
-| Xcode / clang | 15+ |
-| CMake | 3.20+ |
-| SFML | 3.x |
-| TGUI | latest |
-| RtMidi | any |
-| FFmpeg (libav*) | 6+ |
-| OpenCV | 4.x |
+The render path is Metal-based. Control and preview windows use SFML + TGUI.
 
-All dependencies available via Homebrew on Apple Silicon (`/opt/homebrew`).
+## What It Does
+
+At runtime, the app:
+
+- loads still images or video into three source slots
+- runs one FX patch per slot on the GPU
+- composites the processed slots into a single 1920x1080 output
+- mirrors that output into a control preview window
+- reacts to live audio using RMS plus an 8-band spectrum
+- restores scene state, media assignments, and knob values from disk
+
+This is intended for performance use rather than offline rendering.
+
+## Current Feature Set
+
+- 3 source slots with independent media assignment
+- 3 FX slots with two parameters per FX
+- 16 MIDI-triggered scenes
+- per-scene storage for:
+  - FX params
+  - local opacity
+  - local audio gain
+  - local image crossfade speed
+  - local scene crossfade speed
+  - image pan / zoom / rotation
+  - media paths
+  - LIF topology / neuron count state
+- global override modes for:
+  - opacity
+  - audio gain
+  - image crossfade speed
+  - scene crossfade speed
+- shift lock for staying in global override mode without holding Shift
+- live audio input analysis with passthrough monitoring
+- feedback-based and neural-style GPU effects
+
+## Platform
+
+This project currently targets:
+
+- macOS
+- Apple Silicon / Metal-capable hardware
+- CMake-based local builds
+
+## Dependencies
+
+The project uses these libraries and frameworks:
+
+- CMake 3.20+
+- SFML 3
+- TGUI
+- RtMidi
+- FFmpeg libraries (`libavcodec`, `libavformat`, `libavutil`, `libswscale`)
+- OpenCV 4
+- Apple frameworks:
+  - Metal
+  - MetalKit
+  - Foundation
+  - AppKit
+  - CoreVideo
+  - CoreMedia
+  - AudioUnit
+  - AudioToolbox
+  - CoreAudio
+  - AVFoundation
+  - Accelerate
+
+Homebrew install example:
 
 ```bash
-brew install sfml tgui rtmidi ffmpeg opencv cmake
+brew install cmake sfml tgui rtmidi ffmpeg opencv
 ```
 
-### Build
+## Build
+
+From the repository root:
 
 ```bash
-mkdir build && cd build
+mkdir -p build
+cd build
 cmake ..
-make -j$(sysctl -n hw.ncpu)
+cmake --build . --target vjay_ace -j$(sysctl -n hw.ncpu)
+```
+
+You can also build the MIDI monitor tool:
+
+```bash
+cmake --build . --target midi_monitor -j$(sysctl -n hw.ncpu)
+```
+
+## Run
+
+From the build directory:
+
+```bash
 ./vjay_ace
 ```
 
----
+The build copies the Metal shader file next to the executable as:
 
-## Architecture
-
-### Layer topology
-
-```
-Layer 0  (source)  ─┐
-Layer 1  (FX)      ─┴── FX slot 0 processes layer 0 → composited group 0
-Layer 2  (source)  ─┐
-Layer 3  (FX)      ─┴── FX slot 1 processes layer 2 → composited group 1
-Layer 4  (source)  ─┐
-Layer 5  (FX)      ─┴── FX slot 2 processes layer 4 → composited group 2
-                           ↓
-                   Final Porter-Duff over-blend (bottom → top)
+```text
+build/vjay_shaders.metal
 ```
 
-- **Source layers (0, 2, 4):** RGBA8 images or video decoded via FFmpeg/OpenCV.  
-  Each source is optionally rotated and zoomed on the GPU before FX processing.
-- **FX layers (1, 3, 5):** Metal compute kernels run on the source below.  
-  FX layer opacity blends the processed result back against the unprocessed source (0 = bypass, 1 = full effect).
-- **Output:** 1920 × 1080 RGBA8 composited frame, displayed on the performance window (second screen) and mirrored as a preview in the control window.
-
-### State model
-
-Each of the 16 scenes stores independent knob values per mode. When a scene is selected, stored values are applied immediately. Physical knobs use a **pickup / catch-up** system — a knob has no effect until its physical position crosses the stored value, preventing value jumps.
-
-State is persisted to `~/.vjay_ace_state` on every scene change.
-
----
+The app expects that file to exist at runtime.
 
 ## Windows
 
-| Window | Screen | Purpose |
-|---|---|---|
-| Control | Primary | 6 knob arcs, scene name, mode label, preview |
-| Performance | Secondary | Full-screen output |
-| Media Picker | Primary (overlay) | Browse `Heikki_stash/` and assign images to slots |
+The application opens multiple windows:
 
----
+- Control window: primary display
+  - scene name
+  - mode label
+  - shift-lock indicator
+  - 6 knob widgets
+  - audio meter
+  - composite preview
+- Performance window: second display if available
+  - full performance output
+- Media picker window: primary display overlay
+  - browse stash media and assign source images
 
-## MIDI Mapping
+If no second display is available, the performance output falls back to a regular window.
 
-### Knob modes
+## Layer Model
 
-Hold a mode key to activate the corresponding knob assignment. Release to return to FxParam mode.
+The compositor works as three source/FX pairs:
 
-| Key | Mode | Active knobs |
-|---|---|---|
-| O (held) | **Layer Opacity** | Knobs 0, 2, 4 → FX layer (1, 3, 5) opacity (0 = invisible, 1 = full) |
-| G (held) | **FX Audio Gain** | Knobs 0, 2, 4 → per-FX audio gain multiplier (0–2×) for slots 0, 1, 2 |
-| *(default)* | **FX Param** | All 6: two params per FX slot (slot 0: knobs 0–1, slot 1: knobs 2–3, slot 2: knobs 4–5) |
+```text
+Source 0 -> FX 0
+Source 1 -> FX 1
+Source 2 -> FX 2
+```
 
-**Modifier keys** (held while in FxParam mode):
+In implementation terms:
 
-| Key | Mode | Active knobs |
-|---|---|---|
-| R | **Image Rotate** | Knobs 0, 2, 4 → rotation 0–2π for source layers 0, 2, 4 |
-| Z | **Image Zoom** | Knobs 0, 2, 4 → zoom factor 0.5×–2.0× for source layers 0, 2, 4 |
-| P | **Image Pan** | All 6: knobs 0/1, 2/3, 4/5 → X/Y pan (−1.0 to +1.0) for source layers 0, 2, 4 |
+```text
+Layer 0  source
+Layer 1  FX for layer 0
+Layer 2  source
+Layer 3  FX for layer 2
+Layer 4  source
+Layer 5  FX for layer 4
+```
 
-**Intercept keys** (held to redirect even knobs without storing to scene):
+Each source is optionally:
 
-| Key | Function | Active knobs |
-|---|---|---|
-| F (held) | **Image Crossfade Speed** | Knobs 0, 2, 4 → image-load crossfade duration 0.1–8.0 s for source slots 0, 1, 2 |
-| C (held) | **Scene Crossfade Speed** | Knobs 0, 2, 4 → scene-change crossfade duration 0.1–8.0 s for source slots 0, 1, 2 |
+- crossfaded
+- rotated
+- zoomed
+- panned
 
-**Toggle key:**
+Then the corresponding FX kernel runs on it, and the three processed groups are alpha-composited into the final frame.
 
-| Key | Function |
-|---|---|
-| B | **Audio Bypass** — toggles audio band injection to Metal kernels on/off |
+## Audio Analysis
 
-### Knob CCs
+Audio is captured from the default input device and analyzed in real time.
 
-`CC 3 · 9 · 12 · 13 · 14 · 15` → knobs 0–5.
+Available analysis data:
 
-### Scene select
+- RMS level
+- 8-band log-scaled spectrum
 
-MIDI notes C2–C#3 (36–51) select scenes 0–15.
+Band layout:
 
----
+1. Sub-bass: 20-60 Hz
+2. Bass: 60-250 Hz
+3. Lo-mid: 250-500 Hz
+4. Mid: 500-2000 Hz
+5. Hi-mid: 2000-4000 Hz
+6. Presence: 4000-6000 Hz
+7. Brilliance: 6000-12000 Hz
+8. Air: 12000-20000 Hz
+
+Audio data is injected into FX kernels every frame. Many effects already respond to RMS and selected bands.
+
+## MIDI
+
+### Knobs
+
+The app listens to six knob CCs:
+
+```text
+CC 3, 9, 12, 13, 14, 15
+```
+
+These map to knob indices 0-5.
+
+### Scene Select
+
+Scenes are selected by MIDI note-on events from:
+
+```text
+16 scenes starting at MIDI note 36
+```
+
+In code, scene notes start at MIDI note 36 and cover 16 scenes.
+
+## Keyboard Controls
+
+Keyboard actions are documented in detail in [key_modifiers.md](key_modifiers.md).
+
+Summary:
+
+- `R`: image rotate
+- `Z`: image zoom
+- `P`: image pan
+- `O`: local opacity
+- `Shift+O`: global opacity override
+- `G`: local audio gain
+- `Shift+G`: global audio gain override
+- `X`: local image crossfade speed
+- `Shift+X`: global image crossfade speed override
+- `C`: local scene crossfade speed
+- `Shift+C`: global scene crossfade speed override
+- `N`: LIF neuron count mode
+- `B`: audio bypass toggle
+- Shift double-press within 200 ms: toggle Shift Lock
+
+## State Model
+
+Scene state is the main source of truth.
+
+Each scene stores:
+
+- knob values for all control modes
+- per-scene image paths
+- local crossfade timing
+- local opacity values
+- local audio gain values
+- LIF-related state
+
+Global override values are stored separately for:
+
+- opacity
+- audio gain
+- image crossfade speed
+- scene crossfade speed
+
+Override behavior:
+
+- local values are used by default
+- when a global override is changed, it becomes authoritative
+- if the local scene value is touched afterward, that scene takes control again
+
+State is persisted to:
+
+```text
+~/.vjay_ace_state
+```
+
+## Crossfade Behavior
+
+There are two independent crossfade systems:
+
+### Image Crossfade
+
+Used when the source image/video in a slot changes.
+
+- local control: `X`
+- global override: `Shift+X`
+
+### Scene Crossfade Timing
+
+Used to define the timing used when changing scenes for pan/zoom transition behavior.
+
+- local control: `C`
+- global override: `Shift+C`
+
+Crossfade durations are normalized on the knob side and mapped to approximately:
+
+```text
+0.1 to 8.0 seconds
+```
 
 ## FX Patches
 
-All effects are Metal compute kernels running at 1920 × 1080.
+The project currently includes these FX patch IDs:
 
-### Passthrough
-Copies input to output unchanged. Used to leave an FX slot inactive.
+- Passthrough
+- Blur
+- Chromatic Aberration
+- Hue Cycle
+- Video Glitch
+- Kaleidoscope
+- Wave Distort
+- Edge Ink
+- Mold Trails
+- Fractal
+- Pixelate
+- Rainbow Shift
+- Julia Fractal
+- Feedback Zoom
+- Circle Quilt
+- CA Glow
+- Bitplane Reactor
+- LIF Modulate
+- LIF Replace
 
-### Blur
-Box blur with parametric kernel size.  
-- **P1:** Kernel size (5–15 px)
+### Parameter Map
 
-### Chromatic Aberration
-Splits RGB channels horizontally, creating a lens-fringe colour split.  
-- **P1:** Pixel offset (0–20 px)
+Each FX exposes up to two parameters.
 
-### Hue Cycle
-Rotates hue spatially across the image over time.  
-- **P1:** Cycle speed  
-- **P2:** Time offset (phase)
+| FX | Param 1 | Param 2 |
+|---|---|---|
+| Passthrough | - | - |
+| Blur | Kernel Size | - |
+| Chromatic Aberration | Offset (px) | - |
+| Hue Cycle | Speed | Time Offset |
+| Video Glitch | Displace | Chan Shift |
+| Kaleidoscope | Segments | Rotation |
+| Wave Distort | Amplitude | Frequency |
+| Edge Ink | Threshold | Edge Strength |
+| Mold Trails | Sensor Angle | Decay |
+| Fractal / Julia Fractal | C real | C imag |
+| Pixelate | Block Size | - |
+| Rainbow Shift | Speed | Wave Scale |
+| Feedback Zoom | Zoom Delta | Rotate Delta |
+| Circle Quilt | Grid Cols | Radius Scale |
+| CA Glow | Threshold | Glow Spread |
+| Bitplane Reactor | CA Rule | Threshold |
+| LIF Modulate / LIF Replace | Influence | Topology |
 
-### Video Glitch
-Simplex-noise scanline drift with channel separation and interference bands.  
-- **P1:** Displacement strength  
-- **P2:** Channel shift amount
+## Scene Presets
 
-### Kaleidoscope
-Polar coordinate fold creating a mirrored radial mandala.  
-- **P1:** Number of segments (2–12)  
-- **P2:** Rotation angle
+Current built-in scenes:
 
-### Wave Distort
-Sinusoidal UV displacement in both axes.  
-- **P1:** Amplitude (px)  
-- **P2:** Frequency
+| # | Name | FX 0 | FX 1 | FX 2 |
+|---|---|---|---|---|
+| 0 | Pass-Through | Passthrough | Passthrough | Passthrough |
+| 1 | Kaleidoscope | Kaleidoscope | Hue Cycle | LIF Modulate |
+| 2 | Rainbow | Rainbow Shift | Rainbow Shift | Rainbow Shift |
+| 3 | Pixelate | Pixelate | Hue Cycle | Passthrough |
+| 4 | Julia | Julia Fractal | Chroma Aberr | Passthrough |
+| 5 | Glitch Storm | Video Glitch | Wave Distort | Chromatic Aberr |
+| 6 | Feedback Tunnel | Feedback Zoom | Hue Cycle | LIF Replace |
+| 7 | Circle Quilt | Circle Quilt | Passthrough | Passthrough |
+| 8 | CA Glow | CA Glow | CA Glow | Passthrough |
+| 9 | Bitplane | Bitplane Reactor | Passthrough | Hue Cycle |
+| 10 | Blur Haze | Blur | Blur | Passthrough |
+| 11 | Ink Rainbow | Edge Ink | Rainbow Shift | Passthrough |
+| 12 | Deep Space | Julia Fractal | Feedback Zoom | CA Glow |
+| 13 | Total Chaos | Video Glitch | Kaleidoscope | Bitplane Reactor |
+| 14 | Neural Pulse | LIF Modulate | Hue Cycle | Passthrough |
+| 15 | Spike Storm | LIF Replace | Kaleidoscope | Video Glitch |
 
-### Edge Ink
-Sobel edge detection overlaid as a coloured ink line.  
-- **P1:** Edge threshold  
-- **P2:** Edge strength
+## Project Structure
 
-### Pixelate
-Block-average pixelation — great for beat-reactive use.  
-- **P1:** Block size (2–64 px)
+Key source files:
 
-### Rainbow Shift
-Full-spectrum HSV hue rotation travelling as a wave across the image.  
-- **P1:** Speed  
-- **P2:** Spatial wave scale
-
-### Julia Fractal
-Animated Julia set rendered per-pixel and blended with the source.  
-`c` slowly rotates in the complex plane over time.  
-- **P1:** Real part of `c` (−1 to 1)  
-- **P2:** Imaginary part of `c` (−1 to 1)
-
-### Feedback Zoom
-Infinite zoom + rotate feedback loop. Each frame the image is slightly zoomed and rotated into itself with a colour tint. Creates tunnel/vortex loops.  
-- **P1:** Zoom delta (1.0–1.05 per frame)  
-- **P2:** Rotation delta (radians per frame)
-
-### Circle Quilt
-Grid of circles whose radii are driven by local image luminance. Dark areas shrink circles; bright areas expand them.  
-- **P1:** Grid columns (8–64)  
-- **P2:** Radius scale
-
-### CA Glow
-Conway-CA-inspired neighbour density map applied as a glow overlay with an animated colour hue.  
-- **P1:** Luminance threshold for "live" pixels  
-- **P2:** Glow spread radius
-
-### Bitplane Reactor
-Wolfram elementary cellular automaton applied row-by-row to the image's luminance bitplane. Each row is the next CA generation of the row above.  
-- **P1:** CA rule number (0–255; rule 110 and 30 recommended)  
-- **P2:** Luminance threshold
-
-### Mold Trails *(stateless approximation)*
-Single-pass GPU approximation of physarum slime-mould diffusion. Each pixel acts as an independent agent depositing and decaying trail.  
-Full stateful agent simulation (ping-pong buffer) planned.  
-- **P1:** Sensor angle  
-- **P2:** Decay rate
-
-### LIF Network
-Leaky Integrate-and-Fire neuron network applied to image data. Each pixel is treated as a LIF neuron receiving synaptic input from its neighborhood. The topology parameter smoothly transitions from local excitatory coupling (radius 1 grid — small clusters light up) to an inhibitory-centre / excitatory-surround (Mexican-hat) long-range topology that creates edge-highlighted activation patterns. Audio RMS lowers the firing threshold, making beats trigger broader neuron cascades.  
-- **P1:** Firing threshold (0–1; lower = more neurons fire)  
-- **P2:** Topology (0 = local excitatory, 1 = inhibitory-surround long-range)
-
----
-
-## Scenes (C2–C#3)
-
-| # | Note | Name | FX slot 0 | FX slot 1 | FX slot 2 |
-|---|---|---|---|---|---|
-| 0 | C2 | Pass-Through | Passthrough | Passthrough | Passthrough |
-| 1 | C#2 | Kaleidoscope | Kaleidoscope | Hue Cycle | Passthrough |
-| 2 | D2 | Rainbow | Rainbow Shift | Rainbow Shift | Rainbow Shift |
-| 3 | D#2 | Pixelate | Pixelate | Hue Cycle | Passthrough |
-| 4 | E2 | Julia | Julia Fractal | Chroma Aberr | Passthrough |
-| 5 | F2 | Glitch Storm | Video Glitch | Wave Distort | Chroma Aberr |
-| 6 | F#2 | Feedback Tunnel | Feedback Zoom | Hue Cycle | Passthrough |
-| 7 | G2 | Circle Quilt | Circle Quilt | Passthrough | Passthrough |
-| 8 | G#2 | CA Glow | CA Glow | CA Glow | Passthrough |
-| 9 | A2 | Bitplane | Bitplane Reactor | Passthrough | Hue Cycle |
-| 10 | A#2 | Blur Haze | Blur | Blur | Passthrough |
-| 11 | B2 | Ink Rainbow | Edge Ink | Rainbow Shift | Passthrough |
-| 12 | C3 | Deep Space | Julia Fractal | Feedback Zoom | CA Glow |
-| 13 | C#3 | Total Chaos | Video Glitch | Kaleidoscope | Bitplane Reactor |
-| 14 | D3 | Neural Glow | LIF Network | Hue Cycle | Passthrough |
-| 15 | D#3 | Synapse Storm | LIF Network | Wave Distort | LIF Network |
-
----
-
-## File Structure
-
-```
-src/app/
-  App.mm/.h              — Main application, frame loop, MIDI routing, scene management
-  MetalCompositor.mm/.h  — GPU pipeline: PSO creation, FX dispatch, composite
-  LayerManager.cpp/.h    — Source layer state, VideoDecoder orchestration
-  MidiRouter.cpp/.h      — RtMidi wrapper, knob pickup, mode latch
-  ControlWindow.cpp/.h   — SFML+TGUI control surface
-  PerformanceWindow.cpp/.h — Full-screen SFML output window
-  MediaPickerWindow.mm/.h — Stash browser, image slot assignment
-  Constants.h            — Layer topology, MIDI map, FX patch enum, Scene array
-  FxPatch.cpp            — Placeholder for future stateful FX constructors
-  shaders/vjay_shaders.metal — All Metal compute kernels
+```text
+src/app/App.mm                      app orchestration, scene logic, control routing
+src/app/App.h                       app state structures and interfaces
+src/app/MetalCompositor.mm          Metal render and compute pipeline
+src/app/MetalCompositor.h           compositor interface and shared shader params
+src/app/AudioAnalyzer.mm            live audio capture and analysis
+src/app/AudioAnalyzer.h             audio analysis API and band layout
+src/app/LayerManager.cpp            source/media layer state management
+src/app/VideoDecoder.cpp            video decode path
+src/app/MidiRouter.cpp              MIDI input routing
+src/app/ControlWindow.cpp           control UI and keyboard handling
+src/app/PerformanceWindow.cpp       performance output window
+src/app/MediaPickerWindow.mm        media browser and slot assignment UI
+src/app/Constants.h                 scene list, FX IDs, MIDI constants
+src/app/shaders/vjay_shaders.metal  all Metal kernels
+src/midi_monitor/                   standalone MIDI monitor tool
 ```
 
----
+## Runtime Notes
 
-## State Persistence
+- The media picker root is currently wired for the local stash layout used by this project.
+- The app saves state aggressively so scene and media changes survive restarts.
+- Audio bypass only disables audio injection into FX; it does not disable rendering.
+- Shift Lock affects only Shift-based keyboard modifier interpretation in the control window.
 
-Scene knob values and loaded image paths are saved to `~/.vjay_ace_state` (binary, version-tagged) on every scene change. Deleted automatically on version mismatch to avoid corrupt restores.
+## Troubleshooting
 
----
+### App starts but GPU compositing is missing
 
-## Planned
+Check that:
 
-- Stateful MoldTrails with ping-pong agent buffer (100k+ agents)
-- Audio analysis (FFTW) → per-band float buffer passed to Metal kernels
-- Beat-sync strobe and quantised kaleidoscope segment count
-- Additional scenes using the `FeedbackZoom + JuliaFractal` combination at different speeds
+- Metal is available on the machine
+- `build/vjay_shaders.metal` exists
+- the shader file compiled successfully during build
+
+### No audio reaction
+
+Check that:
+
+- the app has microphone/input permission if needed
+- a valid input device is available
+- audio bypass is not enabled
+- the relevant FX slot has non-zero audio gain
+
+### Knobs appear to do nothing
+
+Check that:
+
+- the expected modifier key is held
+- Shift Lock is not forcing you into a global mode unexpectedly
+- your MIDI controller is sending the expected CC numbers
+
+### Scene values seem overridden
+
+This is usually due to a global override mode having been edited recently.
+Touch the local scene value again to reclaim control for that scene.
+
+## Development Notes
+
+Useful files while changing behavior:
+
+- [key_modifiers.md](key_modifiers.md): keyboard control reference
+- [FX_BrainStorm.md](FX_BrainStorm.md): effect ideas and notes
+
+Useful build command:
+
+```bash
+cmake --build build --target vjay_ace -j4
+```
+
+## Status
+
+This README is intended to describe the current codebase rather than planned behavior. If controls change again, update [key_modifiers.md](key_modifiers.md) alongside this file.

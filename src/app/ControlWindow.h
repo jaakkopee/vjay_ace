@@ -5,6 +5,7 @@
 #include <TGUI/Backend/SFML-Graphics.hpp>
 #include <TGUI/Backend/Renderer/SFML-Graphics/CanvasSFML.hpp>
 #include <array>
+#include <chrono>
 #include <functional>
 #include <string>
 
@@ -24,8 +25,14 @@
 //  0.00    0.00    0.00              |
 //
 // CCs: 3, 9, 12, 13, 14, 15
-// O held → knobs = layer opacities (LayerLevel mode)
-// G held → knobs = audio gain      (FxAudio mode)
+// O held → knobs = local layer opacities
+// Shift+O held → knobs = global layer opacity override
+// G held → knobs = local audio gain
+// Shift+G held → knobs = global audio gain override
+// X held → knobs = local image crossfade speed
+// Shift+X held → knobs = global image crossfade speed override
+// C held → knobs = local scene crossfade speed
+// Shift+C held → knobs = global scene crossfade speed override
 // Default → knobs = active FX patch params
 
 class ControlWindow {
@@ -62,32 +69,32 @@ public:
     // Fired when the Z key is pressed (true) or released (false)
     std::function<void(bool pressed)> onZKey;
 
-    // Fired when the O key is pressed (true) or released (false) → LayerLevel mode
+    // Fired when O is pressed/released without Shift (local opacity mode)
     std::function<void(bool pressed)> onOKey;
 
-    // Fired when the G key is pressed (true) or released (false) → FxAudio mode
+    // Fired when G is pressed/released without Shift (local audio gain mode)
     std::function<void(bool pressed)> onGKey;
 
     // Fired when the P key is pressed (true) or released (false) → ImgPan mode
     std::function<void(bool pressed)> onPKey;
 
-    // Fired when the F key is pressed (true) or released (false) → XFade speed mode
-    std::function<void(bool pressed)> onFKey;
+    // Fired when X is pressed/released without Shift (local image xfade mode)
+    std::function<void(bool pressed)> onImgXfadeKey;
 
-    // Fired when the C key is pressed (true) or released (false) → scene XFade speed mode
-    std::function<void(bool pressed)> onCKey;
+    // Fired when C is pressed/released without Shift (local scene xfade mode)
+    std::function<void(bool pressed)> onSceneXfadeKey;
 
-    // Fired when the I key is pressed (true) or released (false) → global image XFade override mode
-    std::function<void(bool pressed)> onIKey;
+    // Fired when Shift+X is pressed/released (global image xfade override)
+    std::function<void(bool pressed)> onGlobalImgXfadeKey;
 
-    // Fired when the S key is pressed (true) or released (false) → global scene XFade override mode
-    std::function<void(bool pressed)> onSKey;
+    // Fired when Shift+C is pressed/released (global scene xfade override)
+    std::function<void(bool pressed)> onGlobalSceneXfadeKey;
 
-    // Fired when the L key is pressed (true) or released (false) → global opacity override mode
-    std::function<void(bool pressed)> onLKey;
+    // Fired when Shift+O is pressed/released (global opacity override mode)
+    std::function<void(bool pressed)> onGlobalOpacityKey;
 
-    // Fired when the H key is pressed (true) or released (false) → global audio gain override mode
-    std::function<void(bool pressed)> onHKey;
+    // Fired when Shift+G is pressed/released (global audio gain override mode)
+    std::function<void(bool pressed)> onGlobalAudioGainKey;
 
     // Fired when the N key is pressed (true) or released (false) → LIF neuron count mode
     std::function<void(bool pressed)> onNKey;
@@ -114,6 +121,7 @@ private:
 
     tgui::Label::Ptr sceneLabel_;
     tgui::Label::Ptr modeLabel_;
+    tgui::Label::Ptr shiftLockLabel_;
     tgui::Panel::Ptr rightPanel_;
     int              leftColW_ = 0;
 
@@ -130,14 +138,17 @@ private:
     bool oKeyWas_ = false;
     bool gKeyWas_ = false;
     bool pKeyWas_ = false;
-    bool fKeyWas_ = false;
-    bool cKeyWas_ = false;
-    bool iKeyWas_ = false;
-    bool sKeyWas_ = false;
-    bool lKeyWas_ = false;
-    bool hKeyWas_ = false;
+    bool imgXfadeKeyWas_ = false;
+    bool sceneXfadeKeyWas_ = false;
+    bool globalImgXfadeKeyWas_ = false;
+    bool globalSceneXfadeKeyWas_ = false;
+    bool globalOpacityKeyWas_ = false;
+    bool globalAudioGainKeyWas_ = false;
     bool nKeyWas_ = false;
     bool bKeyWas_ = false;
+    bool rawShiftWas_ = false;
+    bool shiftLockEnabled_ = false;
+    std::chrono::steady_clock::time_point lastShiftPressTime_ = std::chrono::steady_clock::time_point::min();
     bool audioBypassed_ = false;
 
     // Audio bands for meter drawing (8 bands + RMS)
