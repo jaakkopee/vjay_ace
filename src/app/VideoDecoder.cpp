@@ -42,22 +42,22 @@ bool VideoDecoder::open(const std::string& path, int outW, int outH) {
         default: break;
     }
 
-    // Aspect-cover into outW_ x outH_ (scale to fill, then centre-crop).
+    // Aspect-fit into outW_ x outH_ (preserve whole frame, letterbox if needed).
     {
         float srcAR = float(codecCtx_->width) / float(codecCtx_->height);
         float dstAR = float(outW_) / float(outH_);
-        if (srcAR > dstAR) { // wider than output: match height, crop width
-            scaledH_ = outH_;
-            scaledW_ = int(outH_ * srcAR + 0.5f);
-        } else {             // taller than output: match width, crop height
+        if (srcAR > dstAR) { // wider than output: match width, letterbox top/bottom
             scaledW_ = outW_;
             scaledH_ = int(outW_ / srcAR + 0.5f);
+        } else {             // taller than output: match height, pillarbox left/right
+            scaledH_ = outH_;
+            scaledW_ = int(outH_ * srcAR + 0.5f);
         }
         // Keep dimensions even (some codecs require it)
-        scaledW_ = std::max(2, scaledW_ & ~1);
-        scaledH_ = std::max(2, scaledH_ & ~1);
-        cropX_ = std::max(0, (scaledW_ - outW_) / 2);
-        cropY_ = std::max(0, (scaledH_ - outH_) / 2);
+        scaledW_ = std::min(outW_, std::max(2, scaledW_ & ~1));
+        scaledH_ = std::min(outH_, std::max(2, scaledH_ & ~1));
+        padX_ = std::max(0, (outW_ - scaledW_) / 2);
+        padY_ = std::max(0, (outH_ - scaledH_) / 2);
     }
 
     swsCtx_ = sws_getContext(
@@ -121,21 +121,21 @@ bool VideoDecoder::nextFrame(std::vector<uint8_t>& outRGBA) {
         if (ret == AVERROR(EAGAIN)) continue;
         if (ret < 0) return false;
 
-        // Scale to aspect-cover RGBA dimensions.
+        // Scale to aspect-fit RGBA dimensions.
         sws_scale(swsCtx_,
                   frame_->data, frame_->linesize, 0, codecCtx_->height,
                   rgbaFrame_->data, rgbaFrame_->linesize);
         av_frame_unref(frame_);
 
-        // Centre-crop to exact output size (no baked padding regions).
+        // Composite scaled frame into output with letterbox/pillarbox as needed.
         std::size_t byteCount = outW_ * outH_ * 4;
-        outRGBA.resize(byteCount);
+        outRGBA.assign(byteCount, 0);
         const uint8_t* src = rgbaFrame_->data[0];
         int srcStride = rgbaFrame_->linesize[0];
-        for (int row = 0; row < outH_; ++row) {
-            const uint8_t* srcRow = src + (cropY_ + row) * srcStride + cropX_ * 4;
-            uint8_t* dst = outRGBA.data() + row * outW_ * 4;
-            std::memcpy(dst, srcRow, outW_ * 4);
+        for (int row = 0; row < scaledH_; ++row) {
+            const uint8_t* srcRow = src + row * srcStride;
+            uint8_t* dst = outRGBA.data() + ((padY_ + row) * outW_ + padX_) * 4;
+            std::memcpy(dst, srcRow, scaledW_ * 4);
         }
 
         // Cache for potential static re-use

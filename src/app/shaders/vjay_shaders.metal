@@ -684,8 +684,8 @@ kernel void rotate_source(
     float cy    = float(h) * 0.5f;
 
     // Inverse rotation: find which input pixel maps to this output pixel
-    float dx   = float(gid.x) - cx;
-    float dy   = float(gid.y) - cy;
+    float dx   = (float(gid.x) + 0.5f) - cx;
+    float dy   = (float(gid.y) + 0.5f) - cy;
     float srcX = cosA * dx + sinA * dy + cx;
     float srcY = -sinA * dx + cosA * dy + cy;
 
@@ -697,7 +697,7 @@ kernel void rotate_source(
 // ── zoom_source ───────────────────────────────────────────────────────────────
 // Zooms a source texture around its centre.
 // float_params[0] = zoom factor (1.0 = no change, >1 = zoom in, <1 = zoom out)
-// Uses edge clamp so zoom-out does not expose black blocks.
+// Uses zero clamp to avoid edge-colour streak artifacts when sampling OOB.
 kernel void zoom_source(
     texture2d<float, access::sample> input  [[texture(0)]],
     texture2d<float, access::write>  output [[texture(1)]],
@@ -712,10 +712,10 @@ kernel void zoom_source(
     float cy   = float(h) * 0.5f;
 
     // Inverse mapping: find which input pixel maps to this output pixel
-    float srcX = cx + (float(gid.x) - cx) / zoom;
-    float srcY = cy + (float(gid.y) - cy) / zoom;
+    float srcX = cx + ((float(gid.x) + 0.5f) - cx) / zoom;
+    float srcY = cy + ((float(gid.y) + 0.5f) - cy) / zoom;
 
-    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
     float2 uv = float2(srcX / float(w), srcY / float(h));
     output.write(input.sample(s, uv), gid);
 }
@@ -741,7 +741,7 @@ kernel void crossfade_blend(
 // Translates (pans) a source texture by a fractional pixel offset.
 // float_params[0] = panX  (-1.0 = full left,  0.0 = centre, +1.0 = full right)
 // float_params[1] = panY  (-1.0 = full up,    0.0 = centre, +1.0 = full down)
-// Uses edge clamp so pan/zoom combinations do not expose black regions.
+// Uses zero clamp to avoid dragging border pixel colours into streaks.
 kernel void pan_source(
     texture2d<float, access::sample> input  [[texture(0)]],
     texture2d<float, access::write>  output [[texture(1)]],
@@ -752,10 +752,10 @@ kernel void pan_source(
     if (gid.x >= w || gid.y >= h) return;
 
     // Inverse map: which source pixel maps to this output pixel?
-    float srcX = float(gid.x) - params.float_params[0] * float(w);
-    float srcY = float(gid.y) - params.float_params[1] * float(h);
+    float srcX = (float(gid.x) + 0.5f) - params.float_params[0] * float(w);
+    float srcY = (float(gid.y) + 0.5f) - params.float_params[1] * float(h);
 
-    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_zero);
     output.write(input.sample(s, float2(srcX / float(w), srcY / float(h))), gid);
 }
 

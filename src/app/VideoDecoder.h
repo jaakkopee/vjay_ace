@@ -13,7 +13,7 @@ extern "C" {
 // ── VideoDecoder ─────────────────────────────────────────────────────────────
 // Wraps FFmpeg to decode a video or image file frame-by-frame.
 // Output is always RGBA8 at the requested width/height.
-// Source is scaled with aspect-cover and centre-cropped to avoid baked black bars.
+// Source is scaled with aspect-fit and centred (letterbox/pillarbox as needed).
 
 class VideoDecoder {
 public:
@@ -40,11 +40,11 @@ private:
     int              streamIdx_= -1;
     int              outW_     = 0;
     int              outH_     = 0;
-    // Aspect-cover intermediate size and centre-crop origin.
+    // Aspect-fit intermediate size and output placement origin.
     int              scaledW_  = 0;
     int              scaledH_  = 0;
-    int              cropX_    = 0;
-    int              cropY_    = 0;
+    int              padX_     = 0;
+    int              padY_     = 0;
 
     void close();
     bool seekToStart();
