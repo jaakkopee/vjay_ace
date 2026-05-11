@@ -36,6 +36,8 @@ struct SceneState {
     std::array<uint32_t, NUM_SRC_LAYERS> sceneCrossfadeVersion;
     std::array<uint32_t, NUM_FX_LAYERS> opacityVersion;
     std::array<uint32_t, NUM_FX_LAYERS> audioGainVersion;
+    std::array<uint32_t, NUM_SRC_LAYERS> rotationVersion;
+    std::array<uint32_t, NUM_SRC_LAYERS> zoomVersion;
     int lifTopologyIndex = -1;
     int lifNeuronCount = 0;
 
@@ -48,6 +50,8 @@ struct SceneState {
         sceneCrossfadeVersion.fill(0);
         opacityVersion.fill(0);
         audioGainVersion.fill(0);
+        rotationVersion.fill(0);
+        zoomVersion.fill(0);
         lifTopologyIndex = -1;
         lifNeuronCount = 0;
     }
@@ -86,8 +90,8 @@ private:
 
     // Current knob mode
     KnobMode knobMode_  = KnobMode::FxParam;
-    bool     rKeyHeld_  = false;  // R held → ImgRotate overrides knobMode_
-    bool     zKeyHeld_  = false;  // Z held → ImgZoom overrides knobMode_
+    bool     rKeyHeld_  = false;  // R held (no Shift) → local ImgRotate mode
+    bool     zKeyHeld_  = false;  // Z held (no Shift) → local ImgZoom mode
     bool     oKeyHeld_  = false;  // O held (no Shift) → local LayerLevel mode
     bool     gKeyHeld_  = false;  // G held (no Shift) → local FxAudio mode
     bool     pKeyHeld_  = false;  // P held → ImgPan mode
@@ -95,9 +99,10 @@ private:
     bool     sceneXfadeKeyHeld_       = false;  // S held (no Shift) → local scene crossfade speed mode
     bool     globalImgXfadeKeyHeld_   = false;  // Shift+I held → global image-load crossfade override
     bool     globalSceneXfadeKeyHeld_ = false;  // Shift+S held → global scene-change crossfade override
+    bool     globalRotationKeyHeld_   = false;  // Shift+R held → global rotation override mode
+    bool     globalZoomKeyHeld_       = false;  // Shift+Z held → global zoom override mode
     bool     globalOpacityKeyHeld_    = false;  // Shift+O held → global opacity override mode
     bool     globalAudioGainKeyHeld_  = false;  // Shift+G held → global audio gain override mode
-    bool     nKeyHeld_  = false;  // N held → LIF neuron count mode
     bool     audioBypassed_ = false;  // B key toggle → bypass audio bands
 
     // Returns the effective mode considering modifier keys.
@@ -129,6 +134,10 @@ private:
     std::array<uint32_t, NUM_FX_LAYERS> globalOpacityVersion_ = {0, 0, 0};
     std::array<float, NUM_FX_LAYERS> globalAudioGainNorm_ = {0.125f, 0.125f, 0.125f};
     std::array<uint32_t, NUM_FX_LAYERS> globalAudioGainVersion_ = {0, 0, 0};
+    std::array<float, NUM_SRC_LAYERS> globalRotationNorm_ = {0.5f, 0.5f, 0.5f};  // 0.5 = 0 radians
+    std::array<uint32_t, NUM_SRC_LAYERS> globalRotationVersion_ = {0, 0, 0};
+    std::array<float, NUM_SRC_LAYERS> globalZoomNorm_ = {0.5f, 0.5f, 0.5f};  // 0.5 = 1.0x zoom
+    std::array<uint32_t, NUM_SRC_LAYERS> globalZoomVersion_ = {0, 0, 0};
 
     // Pan/zoom animation state (when changing scenes)
     bool panZoomAnimating_ = false;
@@ -178,6 +187,12 @@ private:
     float effectiveAudioGainNorm(int sceneIdx, int slot) const;
     void setLocalAudioGainNorm(int sceneIdx, int slot, float norm);
     void setGlobalAudioGainNorm(int slot, float norm);
+    float effectiveRotationNorm(int sceneIdx, int slot) const;
+    void setLocalRotationNorm(int sceneIdx, int slot, float norm);
+    void setGlobalRotationNorm(int slot, float norm);
+    float effectiveZoomNorm(int sceneIdx, int slot) const;
+    void setLocalZoomNorm(int sceneIdx, int slot, float norm);
+    void setGlobalZoomNorm(int slot, float norm);
     void setLocalImageCrossfadeNorm(int sceneIdx, int slot, float norm);
     void setLocalSceneCrossfadeNorm(int sceneIdx, int slot, float norm);
     void setGlobalImageCrossfadeNorm(int slot, float norm);

@@ -55,6 +55,11 @@ static LIFNetwork::Topology topologyFromIndex(int index) {
     }
 }
 
+static const char* topologyIndexToName(int index) {
+    static const char* names[] = {"Ring", "Fully", "Feedfwd", "Random", "SmWorld"};
+    return names[std::clamp(index, 0, 4)];
+}
+
 int App::lifNeuronCountFromNorm(float v) {
     static constexpr int kCounts[4] = {512, 1024, 2048, 4096};
     int idx = std::clamp(static_cast<int>(v * 4.0f), 0, 3);
@@ -167,7 +172,7 @@ void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
     midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
     midi_.onModeChange = [this](KnobMode m){
-        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || imgXfadeKeyHeld_ || sceneXfadeKeyHeld_ || globalImgXfadeKeyHeld_ || globalSceneXfadeKeyHeld_ || globalOpacityKeyHeld_ || globalAudioGainKeyHeld_ || nKeyHeld_) return;  // modifier key overrides; ignore while held
+        if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || imgXfadeKeyHeld_ || sceneXfadeKeyHeld_ || globalImgXfadeKeyHeld_ || globalSceneXfadeKeyHeld_ || globalOpacityKeyHeld_ || globalAudioGainKeyHeld_ || globalRotationKeyHeld_ || globalZoomKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
         controlWin_.setKnobMode(m);
         static const char* opNames[]   = {"Opac L0", "-", "Opac L1", "-", "Opac L2", "-"};
@@ -192,7 +197,9 @@ void App::wireCallbacks() {
     // ── Shared helper: update display after a modifier key press/release ──
     auto refreshModifierDisplay = [this]() {
         static const char* rotNames[]   = {"Rot L0",    "-", "Rot L1",    "-", "Rot L2",    "-"};
+        static const char* gRotNames[]  = {"GRot L0",   "-", "GRot L1",   "-", "GRot L2",   "-"};
         static const char* zoomNames[]  = {"Zoom L0",   "-", "Zoom L1",   "-", "Zoom L2",   "-"};
+        static const char* gZoomNames[] = {"GZoom L0",  "-", "GZoom L1",  "-", "GZoom L2",  "-"};
         static const char* opNames[]    = {"Opac L0",   "-", "Opac L1",   "-", "Opac L2",   "-"};
         static const char* gOpNames[]   = {"GOpac L0",  "-", "GOpac L1",  "-", "GOpac L2",  "-"};
         static const char* gainNames[]  = {"Gain 0",    "-", "Gain 1",    "-", "Gain 2",    "-"};
@@ -203,6 +210,7 @@ void App::wireCallbacks() {
         static const char* gImgFdNames[] = {"GImgFd 0",  "-", "GImgFd 1",  "-", "GImgFd 2",  "-"};
         static const char* gScnFdNames[] = {"GScnFd 0",  "-", "GScnFd 1",  "-", "GScnFd 2",  "-"};
         static const char* lifCountNames[] = {"LIF 512-4k", "-", "LIF 512-4k", "-", "LIF 512-4k", "-"};
+        static const char* lifTopoNames[] = {"Topology", "Topology", "Topology", "Topology", "Topology", "Topology"};
         if (globalImgXfadeKeyHeld_) {
             // I key overrides: show global image-load crossfade speed mode
             controlWin_.setKnobMode(KnobMode::FxParam);
@@ -217,22 +225,36 @@ void App::wireCallbacks() {
             refreshKnobDisplay();
             return;
         }
+        if (globalRotationKeyHeld_) {
+            // Shift+R overrides: show global rotation override mode
+            controlWin_.setKnobMode(KnobMode::ImgRotate);
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gRotNames[i]);
+            refreshKnobDisplay();
+            return;
+        }
+        if (globalZoomKeyHeld_) {
+            // Shift+Z overrides: show global zoom override mode
+            controlWin_.setKnobMode(KnobMode::ImgZoom);
+            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gZoomNames[i]);
+            refreshKnobDisplay();
+            return;
+        }
         if (globalOpacityKeyHeld_) {
-            // L key overrides: show global opacity override mode
+            // Shift+O overrides: show global opacity override mode
             controlWin_.setKnobMode(KnobMode::LayerLevel);
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gOpNames[i]);
             refreshKnobDisplay();
             return;
         }
         if (globalAudioGainKeyHeld_) {
-            // H key overrides: show global audio gain override mode
+            // Shift+G overrides: show global audio gain override mode
             controlWin_.setKnobMode(KnobMode::FxAudio);
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, gGainNames[i]);
             refreshKnobDisplay();
             return;
         }
         if (imgXfadeKeyHeld_) {
-            // F key overrides: show image-load crossfade speed mode
+            // X key overrides: show image-load crossfade speed mode
             controlWin_.setKnobMode(KnobMode::FxParam); // reuse any label; will be overridden below
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, xfadeNames[i]);
             refreshKnobDisplay();
@@ -242,12 +264,6 @@ void App::wireCallbacks() {
             // C key overrides: show scene-change crossfade speed mode
             controlWin_.setKnobMode(KnobMode::FxParam);
             for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, scnFdNames[i]);
-            refreshKnobDisplay();
-            return;
-        }
-        if (nKeyHeld_) {
-            controlWin_.setKnobMode(KnobMode::FxParam);
-            for (int i = 0; i < NUM_KNOBS; ++i) controlWin_.setKnobParamName(i, lifCountNames[i]);
             refreshKnobDisplay();
             return;
         }
@@ -326,9 +342,14 @@ void App::wireCallbacks() {
         globalAudioGainKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
-    controlWin_.onNKey = [this, refreshModifierDisplay](bool pressed) {
-        if (pressed == nKeyHeld_) return;
-        nKeyHeld_ = pressed;
+    controlWin_.onGlobalRotationKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == globalRotationKeyHeld_) return;
+        globalRotationKeyHeld_ = pressed;
+        refreshModifierDisplay();
+    };
+    controlWin_.onGlobalZoomKey = [this, refreshModifierDisplay](bool pressed) {
+        if (pressed == globalZoomKeyHeld_) return;
+        globalZoomKeyHeld_ = pressed;
         refreshModifierDisplay();
     };
     controlWin_.onBKey = [this](bool bypassed) {
@@ -540,6 +561,52 @@ void App::setGlobalAudioGainNorm(int slot, float norm) {
     ++globalAudioGainVersion_[slot];
 }
 
+float App::effectiveRotationNorm(int sceneIdx, int slot) const {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES || slot < 0 || slot >= NUM_SRC_LAYERS) return 0.5f;
+    const SceneState& s = scenes_[sceneIdx];
+    if (s.rotationVersion[slot] < globalRotationVersion_[slot])
+        return globalRotationNorm_[slot];
+    const int rotMi = static_cast<int>(KnobMode::ImgRotate);
+    const float local = s.knobs[rotMi][slot * 2];
+    return (local >= 0.0f) ? local : 0.5f;
+}
+
+void App::setLocalRotationNorm(int sceneIdx, int slot, float norm) {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES || slot < 0 || slot >= NUM_SRC_LAYERS) return;
+    const int rotMi = static_cast<int>(KnobMode::ImgRotate);
+    scenes_[sceneIdx].knobs[rotMi][slot * 2] = norm;
+    scenes_[sceneIdx].rotationVersion[slot] = globalRotationVersion_[slot];
+}
+
+void App::setGlobalRotationNorm(int slot, float norm) {
+    if (slot < 0 || slot >= NUM_SRC_LAYERS) return;
+    globalRotationNorm_[slot] = norm;
+    ++globalRotationVersion_[slot];
+}
+
+float App::effectiveZoomNorm(int sceneIdx, int slot) const {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES || slot < 0 || slot >= NUM_SRC_LAYERS) return 0.5f;
+    const SceneState& s = scenes_[sceneIdx];
+    if (s.zoomVersion[slot] < globalZoomVersion_[slot])
+        return globalZoomNorm_[slot];
+    const int zoomMi = static_cast<int>(KnobMode::ImgZoom);
+    const float local = s.knobs[zoomMi][slot * 2];
+    return (local >= 0.0f) ? local : 0.5f;
+}
+
+void App::setLocalZoomNorm(int sceneIdx, int slot, float norm) {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES || slot < 0 || slot >= NUM_SRC_LAYERS) return;
+    const int zoomMi = static_cast<int>(KnobMode::ImgZoom);
+    scenes_[sceneIdx].knobs[zoomMi][slot * 2] = norm;
+    scenes_[sceneIdx].zoomVersion[slot] = globalZoomVersion_[slot];
+}
+
+void App::setGlobalZoomNorm(int slot, float norm) {
+    if (slot < 0 || slot >= NUM_SRC_LAYERS) return;
+    globalZoomNorm_[slot] = norm;
+    ++globalZoomVersion_[slot];
+}
+
 void App::setLocalImageCrossfadeNorm(int sceneIdx, int slot, float norm) {
     if (sceneIdx < 0 || sceneIdx >= NUM_SCENES || slot < 0 || slot >= NUM_SRC_LAYERS) return;
     scenes_[sceneIdx].imageCrossfadeSpeedNorm[slot] = norm;
@@ -585,12 +652,24 @@ void App::applySceneToEngine(int idx) {
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot)
         applyKnob(slot * 2, effectiveAudioGainNorm(idx, slot), KnobMode::FxAudio);
 
+    // Rotation is scene-local by default and can be globally overridden.
+    // Skip when a pan/zoom/opacity animation is running — it will set rotation each frame.
+    if (!panZoomAnimating_) {
+        for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
+            applyKnob(slot * 2, effectiveRotationNorm(idx, slot), KnobMode::ImgRotate);
+    }
+
+    // Zoom is scene-local by default and can be globally overridden.
+    // Skip when a pan/zoom/opacity animation is running — it will set zoom each frame.
+    if (!panZoomAnimating_) {
+        for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
+            applyKnob(slot * 2, effectiveZoomNorm(idx, slot), KnobMode::ImgZoom);
+    }
+
     for (int mi = 0; mi < SceneState::NMODES; ++mi) {
-        if (mi == static_cast<int>(KnobMode::LayerLevel) || mi == static_cast<int>(KnobMode::FxAudio)) continue;
-        // Skip pan/zoom/rotate when animating — the animation sets them each frame.
-        if (panZoomAnimating_ && (mi == static_cast<int>(KnobMode::ImgPan) ||
-                                  mi == static_cast<int>(KnobMode::ImgZoom) ||
-                                  mi == static_cast<int>(KnobMode::ImgRotate))) continue;
+        if (mi == static_cast<int>(KnobMode::LayerLevel) || mi == static_cast<int>(KnobMode::FxAudio) || mi == static_cast<int>(KnobMode::ImgRotate) || mi == static_cast<int>(KnobMode::ImgZoom)) continue;
+        // Skip pan when animating — the animation sets it each frame.
+        if (panZoomAnimating_ && mi == static_cast<int>(KnobMode::ImgPan)) continue;
         auto mode = static_cast<KnobMode>(mi);
         for (int k = 0; k < NUM_KNOBS; ++k) {
             if (s.knobs[mi][k] >= 0.0f)
@@ -658,6 +737,26 @@ void App::refreshKnobDisplay() {
         return;
     }
 
+    // Shift+R key mode: show global rotation override values for even knobs.
+    if (globalRotationKeyHeld_) {
+        for (int k = 0; k < NUM_KNOBS; ++k) {
+            if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
+            int slot = k / 2;
+            controlWin_.setKnobValue(k, static_cast<int>(globalRotationNorm_[slot] * 127.0f));
+        }
+        return;
+    }
+
+    // Shift+Z key mode: show global zoom override values for even knobs.
+    if (globalZoomKeyHeld_) {
+        for (int k = 0; k < NUM_KNOBS; ++k) {
+            if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
+            int slot = k / 2;
+            controlWin_.setKnobValue(k, static_cast<int>(globalZoomNorm_[slot] * 127.0f));
+        }
+        return;
+    }
+
     // F key mode: show image-load crossfade speed values for even knobs, 0 for odd.
     if (imgXfadeKeyHeld_) {
         for (int k = 0; k < NUM_KNOBS; ++k) {
@@ -678,15 +777,6 @@ void App::refreshKnobDisplay() {
         return;
     }
 
-    if (nKeyHeld_) {
-        float display = normFromLIFNeuronCount(scenes_[currentScene_].lifNeuronCount);
-        for (int k = 0; k < NUM_KNOBS; ++k) {
-            if (k % 2 == 1) { controlWin_.setKnobValue(k, 0); continue; }
-            controlWin_.setKnobValue(k, static_cast<int>(display * 127.0f));
-        }
-        return;
-    }
-
     KnobMode eff = effectiveMode();
     int mi = static_cast<int>(eff);
     const SceneState& s = scenes_[currentScene_];
@@ -700,6 +790,7 @@ void App::refreshKnobDisplay() {
         // Odd knobs are inactive in single-param-per-layer modes.
         if (evenOnlyMode && k % 2 == 1) {
             controlWin_.setKnobValue(k, 0);
+            controlWin_.setKnobTopoName(k, "");  // Clear topology name
             continue;
         }
         float v = s.knobs[mi][k];
@@ -710,6 +801,22 @@ void App::refreshKnobDisplay() {
         // If this knob hasn't been set in this scene yet, show physical position.
         float display = (v >= 0.0f) ? v : (evenOnlyMode ? 0.0f : knobLastPhys_[k]);
         controlWin_.setKnobValue(k, static_cast<int>(display * 127.0f));
+        
+        // Show topology name for odd knobs in FxParam mode when the knob is a topology parameter.
+        if (eff == KnobMode::FxParam && k % 2 == 1) {
+            int slot = k / 2;
+            FxPatchId patch = SCENES[currentScene_].fx[slot];
+            if (isLIFPatch(patch)) {
+                // This knob controls the topology parameter of a LIF patch.
+                int topoIdx = s.lifTopologyIndex;
+                if (topoIdx < 0) topoIdx = 0;
+                controlWin_.setKnobTopoName(k, topologyIndexToName(topoIdx));
+            } else {
+                controlWin_.setKnobTopoName(k, "");  // Clear for non-LIF patches
+            }
+        } else {
+            controlWin_.setKnobTopoName(k, "");  // Clear topology name for all other modes
+        }
     }
 }
 
@@ -725,7 +832,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
     // If a modifier key is held, override to its mode
     KnobMode effectiveMod = effectiveMode();
     // Only use MIDI-provided mode when no modifier key is held.
-    KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || imgXfadeKeyHeld_ || sceneXfadeKeyHeld_ || globalImgXfadeKeyHeld_ || globalSceneXfadeKeyHeld_ || globalOpacityKeyHeld_ || globalAudioGainKeyHeld_ || nKeyHeld_) ? effectiveMod : mode;
+    KnobMode eff = (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || imgXfadeKeyHeld_ || sceneXfadeKeyHeld_ || globalImgXfadeKeyHeld_ || globalSceneXfadeKeyHeld_ || globalOpacityKeyHeld_ || globalAudioGainKeyHeld_ || globalRotationKeyHeld_ || globalZoomKeyHeld_) ? effectiveMod : mode;
 
     // I key intercept: set global image-load crossfade speed override for the even knob's slot.
     if (globalImgXfadeKeyHeld_) {
@@ -770,6 +877,28 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         return;
     }
 
+    // Shift+R intercept: set global rotation override for the even knob's source slot.
+    if (globalRotationKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+            int slot = knobIdx / 2;
+            setGlobalRotationNorm(slot, normValue);
+            applyKnob(knobIdx, normValue, KnobMode::ImgRotate);
+            controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        }
+        return;
+    }
+
+    // Shift+Z intercept: set global zoom override for the even knob's source slot.
+    if (globalZoomKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+            int slot = knobIdx / 2;
+            setGlobalZoomNorm(slot, normValue);
+            applyKnob(knobIdx, normValue, KnobMode::ImgZoom);
+            controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        }
+        return;
+    }
+
     // F key intercept: set scene-local image-load crossfade speed for the even knob's slot.
     if (imgXfadeKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
@@ -790,14 +919,6 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         }
         return;
     }
-    if (nKeyHeld_) {
-        if (knobIdx % 2 == 0) {
-            scenes_[currentScene_].lifNeuronCount = lifNeuronCountFromNorm(normValue);
-            compositor_.setLIFNeuronCount(scenes_[currentScene_].lifNeuronCount);
-            refreshKnobDisplay();
-        }
-        return;
-    }
     int    mi   = static_cast<int>(eff);
     float& soft = scenes_[currentScene_].knobs[mi][knobIdx];
 
@@ -814,6 +935,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         if (slot < NUM_FX_LAYERS && isLIFPatch(SCENES[currentScene_].fx[slot])) {
             scenes_[currentScene_].lifTopologyIndex = topologyIndexFromNorm(normValue);
             compositor_.setLIFTopology(topologyFromIndex(scenes_[currentScene_].lifTopologyIndex));
+            controlWin_.setKnobTopoName(knobIdx, topologyIndexToName(scenes_[currentScene_].lifTopologyIndex));
         }
     }
     applyKnob(knobIdx, normValue, eff);
@@ -1008,6 +1130,28 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         return;
     }
 
+    // Shift+R intercept: set global rotation override.
+    if (globalRotationKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+            int slot = knobIdx / 2;
+            setGlobalRotationNorm(slot, normValue);
+            applyKnob(knobIdx, normValue, KnobMode::ImgRotate);
+        }
+        controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        return;
+    }
+
+    // Shift+Z intercept: set global zoom override.
+    if (globalZoomKeyHeld_) {
+        if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+            int slot = knobIdx / 2;
+            setGlobalZoomNorm(slot, normValue);
+            applyKnob(knobIdx, normValue, KnobMode::ImgZoom);
+        }
+        controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+        return;
+    }
+
     // F key intercept: set scene-local image-load crossfade speed.
     if (imgXfadeKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
@@ -1029,14 +1173,6 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         return;
     }
 
-    if (nKeyHeld_) {
-        if (knobIdx % 2 == 0) {
-            scenes_[currentScene_].lifNeuronCount = lifNeuronCountFromNorm(normValue);
-            compositor_.setLIFNeuronCount(scenes_[currentScene_].lifNeuronCount);
-            refreshKnobDisplay();
-        }
-        return;
-    }
 
     KnobMode eff = effectiveMode();
     int mi = static_cast<int>(eff);
@@ -1051,6 +1187,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         if (slot < NUM_FX_LAYERS && isLIFPatch(SCENES[currentScene_].fx[slot])) {
             scenes_[currentScene_].lifTopologyIndex = topologyIndexFromNorm(normValue);
             compositor_.setLIFTopology(topologyFromIndex(scenes_[currentScene_].lifTopologyIndex));
+            controlWin_.setKnobTopoName(knobIdx, topologyIndexToName(scenes_[currentScene_].lifTopologyIndex));
         }
     }
     knobLastPhys_[knobIdx] = normValue;

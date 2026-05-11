@@ -1,4 +1,5 @@
 #include "ControlWindow.h"
+#include "CapsLockDetector.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -41,8 +42,8 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     modeLabel_->getRenderer()->setTextColor(TEXT_DIM);
     gui_.add(modeLabel_);
 
-    // ── Shift-lock label ─────────────────────────────────────────────────────
-    shiftLockLabel_ = tgui::Label::create("Shift Lock: Off");
+    // ── Caps Lock indicator label ───────────────────────────────────────────
+    shiftLockLabel_ = tgui::Label::create("Caps Lock: Off");
     shiftLockLabel_->setPosition(14, 70);
     shiftLockLabel_->setTextSize(13);
     shiftLockLabel_->getRenderer()->setTextColor(TEXT_DIM);
@@ -81,6 +82,15 @@ void ControlWindow::buildGui(int width, int /*height*/) {
         ks.valueLabel->setTextSize(15);
         ks.valueLabel->getRenderer()->setTextColor(TEXT_VAL);
         gui_.add(ks.valueLabel);
+
+        // Topology name label (centred below value)
+        ks.topoNameLabel = tgui::Label::create("");
+        ks.topoNameLabel->setPosition(col * slotW, ky + KNOB_SIZE + 56);
+        ks.topoNameLabel->setSize(slotW, 20);
+        ks.topoNameLabel->setHorizontalAlignment(tgui::HorizontalAlignment::Center);
+        ks.topoNameLabel->setTextSize(12);
+        ks.topoNameLabel->getRenderer()->setTextColor(tgui::Color(200, 200, 220));
+        gui_.add(ks.topoNameLabel);
 
         drawKnob(i);
     }
@@ -171,6 +181,11 @@ void ControlWindow::setKnobParamName(int knobIdx, const std::string& name) {
     if (knobs_[knobIdx].paramLabel) knobs_[knobIdx].paramLabel->setText(name);
 }
 
+void ControlWindow::setKnobTopoName(int knobIdx, const std::string& name) {
+    if (knobIdx < 0 || knobIdx >= NUM_KNOBS) return;
+    if (knobs_[knobIdx].topoNameLabel) knobs_[knobIdx].topoNameLabel->setText(name);
+}
+
 void ControlWindow::setSceneName(const std::string& name) {
     if (sceneLabel_) sceneLabel_->setText("SCENE: " + name);
 }
@@ -238,33 +253,23 @@ bool ControlWindow::handleEvents() {
 void ControlWindow::update() {
     // Poll modifier-aware key states each frame — robust against TGUI consuming key events.
     // Local controls use first-letter key, global uses Shift+same key.
-    bool rNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R);
-    bool zNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z);
+    // Caps Lock acts as a "shift lock" for global modifier modes.
+    bool rRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R);
+    bool zRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z);
     bool rawShiftNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)
                     || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RShift);
+    bool capsLockActive = isCapsLockActive();
 
-    if (rawShiftNow && !rawShiftWas_) {
-        auto now = std::chrono::steady_clock::now();
-        if (lastShiftPressTime_ != std::chrono::steady_clock::time_point::min()) {
-            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastShiftPressTime_).count();
-            if (dt <= 200) {
-                shiftLockEnabled_ = !shiftLockEnabled_;
-                lastShiftPressTime_ = std::chrono::steady_clock::time_point::min();
-            } else {
-                lastShiftPressTime_ = now;
-            }
-        } else {
-            lastShiftPressTime_ = now;
-        }
-    }
-    rawShiftWas_ = rawShiftNow;
-
-    bool shiftNow = rawShiftNow || shiftLockEnabled_;
+    bool shiftNow = rawShiftNow || capsLockActive;
     bool oRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::O);
     bool gRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::G);
     bool xRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X);
     bool cRaw = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C);
 
+    bool rNow = rRaw && !shiftNow;         // local rotation
+    bool globalRotationNow = rRaw && shiftNow;
+    bool zNow = zRaw && !shiftNow;         // local zoom
+    bool globalZoomNow = zRaw && shiftNow;
     bool oNow = oRaw && !shiftNow;         // local opacity
     bool globalOpacityNow = oRaw && shiftNow;
     bool gNow = gRaw && !shiftNow;         // local audio gain
@@ -275,12 +280,11 @@ void ControlWindow::update() {
     bool globalSceneXfadeNow = cRaw && shiftNow;
 
     bool pNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::P);
-    bool nNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::N);
     bool bNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::B);
 
     if (shiftLockLabel_) {
-        shiftLockLabel_->setText(std::string("Shift Lock: ") + (shiftLockEnabled_ ? "On" : "Off"));
-        shiftLockLabel_->getRenderer()->setTextColor(shiftLockEnabled_ ? tgui::Color(255, 210, 80) : TEXT_DIM);
+        shiftLockLabel_->setText(std::string("Caps Lock: ") + (capsLockActive ? "On" : "Off"));
+        shiftLockLabel_->getRenderer()->setTextColor(capsLockActive ? tgui::Color(255, 210, 80) : TEXT_DIM);
     }
 
     if (rNow != rKeyWas_) { rKeyWas_ = rNow; if (onRKey) onRKey(rNow); }
@@ -312,7 +316,14 @@ void ControlWindow::update() {
         globalAudioGainKeyWas_ = globalAudioGainNow;
         if (onGlobalAudioGainKey) onGlobalAudioGainKey(globalAudioGainNow);
     }
-    if (nNow != nKeyWas_) { nKeyWas_ = nNow; if (onNKey) onNKey(nNow); }
+    if (globalRotationNow != globalRotationKeyWas_) {
+        globalRotationKeyWas_ = globalRotationNow;
+        if (onGlobalRotationKey) onGlobalRotationKey(globalRotationNow);
+    }
+    if (globalZoomNow != globalZoomKeyWas_) {
+        globalZoomKeyWas_ = globalZoomNow;
+        if (onGlobalZoomKey) onGlobalZoomKey(globalZoomNow);
+    }
     // B key: toggle bypass on rising edge (key-down event)
     if (bNow && !bKeyWas_) {
         audioBypassed_ = !audioBypassed_;

@@ -16,6 +16,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/VideoDecoder.cpp" "CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/App.mm" "CMakeFiles/vjay_ace.dir/src/app/App.mm.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/App.mm.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/AudioAnalyzer.mm" "CMakeFiles/vjay_ace.dir/src/app/AudioAnalyzer.mm.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/AudioAnalyzer.mm.o.d"
+  "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/CapsLockDetector.mm" "CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/LIFNetwork.mm" "CMakeFiles/vjay_ace.dir/src/app/LIFNetwork.mm.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/LIFNetwork.mm.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/MediaPickerWindow.mm" "CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/MetalCompositor.mm" "CMakeFiles/vjay_ace.dir/src/app/MetalCompositor.mm.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/MetalCompositor.mm.o.d"

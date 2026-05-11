@@ -123,12 +123,12 @@ CMakeFiles/midi_monitor.dir/clean:
 CMakeFiles/vjay_ace.dir/all: CMakeFiles/copy_metal_shader.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=5,6,7,8,9,10,11,12,13,14,15,16,17 "Built target vjay_ace"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=5,6,7,8,9,10,11,12,13,14,15,16,17,18 "Built target vjay_ace"
 .PHONY : CMakeFiles/vjay_ace.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/vjay_ace.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles 14
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/vjay_ace.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles 0
 .PHONY : CMakeFiles/vjay_ace.dir/rule
@@ -140,7 +140,7 @@ vjay_ace: CMakeFiles/vjay_ace.dir/rule
 # codegen rule for target.
 CMakeFiles/vjay_ace.dir/codegen: CMakeFiles/copy_metal_shader.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=5,6,7,8,9,10,11,12,13,14,15,16,17 "Finished codegen for target vjay_ace"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=5,6,7,8,9,10,11,12,13,14,15,16,17,18 "Finished codegen for target vjay_ace"
 .PHONY : CMakeFiles/vjay_ace.dir/codegen
 
 # clean rule for target.

@@ -1274,4 +1274,5 @@ CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o: \
   /opt/homebrew/opt/tgui/include/TGUI/Backend/Renderer/SFML-Graphics/BackendRenderTargetSFML.hpp \
   /opt/homebrew/opt/tgui/include/TGUI/Backend/Renderer/SFML-Graphics/CanvasSFML.hpp \
   /opt/homebrew/opt/tgui/include/TGUI/Widgets/CanvasBase.hpp \
-  /opt/homebrew/opt/tgui/include/TGUI/Backend/Font/SFML-Graphics/BackendFontSFML.hpp
+  /opt/homebrew/opt/tgui/include/TGUI/Backend/Font/SFML-Graphics/BackendFontSFML.hpp \
+  /Users/jaakkop/Documents/koodii/vjay_ace/src/app/CapsLockDetector.h

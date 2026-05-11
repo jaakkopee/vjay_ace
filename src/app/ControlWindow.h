@@ -54,6 +54,9 @@ public:
     // Update parameter name shown under a knob.
     void setKnobParamName(int knobIdx, const std::string& name);
 
+    // Update topology name label shown below the value.
+    void setKnobTopoName(int knobIdx, const std::string& name);
+
     // Update the scene (FX patch) name at top-left.
     void setSceneName(const std::string& name);
 
@@ -63,11 +66,17 @@ public:
     // Fired when user drags a knob: knobIdx 0-5, normValue 0.0-1.0
     std::function<void(int knobIdx, float normValue)> onKnobDrag;
 
-    // Fired when the R key is pressed (true) or released (false)
+    // Fired when R is pressed/released without Shift (local rotation mode)
     std::function<void(bool pressed)> onRKey;
 
-    // Fired when the Z key is pressed (true) or released (false)
+    // Fired when Shift+R is pressed/released (global rotation override mode)
+    std::function<void(bool pressed)> onGlobalRotationKey;
+
+    // Fired when Z is pressed/released without Shift (local zoom mode)
     std::function<void(bool pressed)> onZKey;
+
+    // Fired when Shift+Z is pressed/released (global zoom override mode)
+    std::function<void(bool pressed)> onGlobalZoomKey;
 
     // Fired when O is pressed/released without Shift (local opacity mode)
     std::function<void(bool pressed)> onOKey;
@@ -96,9 +105,6 @@ public:
     // Fired when Shift+G is pressed/released (global audio gain override mode)
     std::function<void(bool pressed)> onGlobalAudioGainKey;
 
-    // Fired when the N key is pressed (true) or released (false) → LIF neuron count mode
-    std::function<void(bool pressed)> onNKey;
-
     // Fired when the B key is toggled (true = bypassed, false = active)
     std::function<void(bool bypassed)> onBKey;
 
@@ -116,6 +122,7 @@ private:
         tgui::CanvasSFML::Ptr canvas;
         tgui::Label::Ptr      paramLabel;
         tgui::Label::Ptr      valueLabel;
+        tgui::Label::Ptr      topoNameLabel;
     };
     std::array<KnobState, NUM_KNOBS> knobs_;
 
@@ -144,11 +151,10 @@ private:
     bool globalSceneXfadeKeyWas_ = false;
     bool globalOpacityKeyWas_ = false;
     bool globalAudioGainKeyWas_ = false;
+    bool globalRotationKeyWas_ = false;
+    bool globalZoomKeyWas_ = false;
     bool nKeyWas_ = false;
     bool bKeyWas_ = false;
-    bool rawShiftWas_ = false;
-    bool shiftLockEnabled_ = false;
-    std::chrono::steady_clock::time_point lastShiftPressTime_ = std::chrono::steady_clock::time_point::min();
     bool audioBypassed_ = false;
 
     // Audio bands for meter drawing (8 bands + RMS)
