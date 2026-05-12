@@ -653,11 +653,9 @@ void App::applySceneToEngine(int idx) {
         applyKnob(slot * 2, effectiveAudioGainNorm(idx, slot), KnobMode::FxAudio);
 
     // Rotation is scene-local by default and can be globally overridden.
-    // Skip when a pan/zoom/opacity animation is running — it will set rotation each frame.
-    if (!panZoomAnimating_) {
-        for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
-            applyKnob(slot * 2, effectiveRotationNorm(idx, slot), KnobMode::ImgRotate);
-    }
+    // Always apply on scene load; pan/zoom animation does not animate rotation.
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
+        applyKnob(slot * 2, effectiveRotationNorm(idx, slot), KnobMode::ImgRotate);
 
     // Zoom is scene-local by default and can be globally overridden.
     // Skip when a pan/zoom/opacity animation is running — it will set zoom each frame.
@@ -877,14 +875,22 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         return;
     }
 
-    // Shift+R intercept: set global rotation override for the even knob's source slot.
-    if (globalRotationKeyHeld_) {
+    // Only Shift+R or Caps Lock+R: set global rotation override. R alone is always local.
+    if (globalRotationKeyHeld_ && !rKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             setGlobalRotationNorm(slot, normValue);
             applyKnob(knobIdx, normValue, KnobMode::ImgRotate);
             controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
+            return;
         }
+    }
+    // Always set local rotation if R is held (rKeyHeld_) or mode/eff is ImgRotate
+    if ((rKeyHeld_ || mode == KnobMode::ImgRotate || eff == KnobMode::ImgRotate) && knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
+        int slot = knobIdx / 2;
+        setLocalRotationNorm(currentScene_, slot, normValue);
+        applyKnob(knobIdx, normValue, KnobMode::ImgRotate);
+        controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         return;
     }
 
@@ -1131,7 +1137,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
     }
 
     // Shift+R intercept: set global rotation override.
-    if (globalRotationKeyHeld_) {
+    if (globalRotationKeyHeld_ && !rKeyHeld_) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             setGlobalRotationNorm(slot, normValue);
@@ -1181,6 +1187,8 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         setLocalLayerOpacityNorm(currentScene_, knobIdx / 2, normValue);
     if (eff == KnobMode::FxAudio && knobIdx % 2 == 0)
         setLocalAudioGainNorm(currentScene_, knobIdx / 2, normValue);
+    if (eff == KnobMode::ImgRotate && knobIdx % 2 == 0)
+        setLocalRotationNorm(currentScene_, knobIdx / 2, normValue);
     scenes_[currentScene_].knobs[mi][knobIdx] = normValue;
     if (eff == KnobMode::FxParam && (knobIdx % 2 == 1)) {
         int slot = knobIdx / 2;

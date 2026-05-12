@@ -667,13 +667,27 @@ kernel void feedback_zoom(
     constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
     float4 feedback = feedbackTex.sample(s, float2(srcX / float(w), srcY / float(h)));
 
-    // Colour tint the feedback
+    // --- Enhance contrast and brightness ---
     float3 hsv = rgb_to_hsv(feedback.rgb);
     hsv.x = fmod(hsv.x + hue * 0.5f, 360.0f);
-    // Desaturate toward B&W and boost contrast (S-curve on value)
-    hsv.y *= 0.25f;
-    hsv.z = smoothstep(0.25f, 0.75f, hsv.z);
-    feedback.rgb = hsv_to_rgb(hsv);
+    hsv.y *= 0.33f; // less desaturation
+    // Stronger S-curve for contrast, then boost brightness
+    hsv.z = pow(smoothstep(0.18f, 0.82f, hsv.z), 1.15f) * 1.25f;
+    feedback.rgb = clamp(hsv_to_rgb(hsv), 0.0f, 1.0f);
+
+    // --- Magnify local maxima pixels ---
+    float maxLocal = feedback.rgb.r;
+    for (int dy = -1; dy <= 1; ++dy)
+    for (int dx = -1; dx <= 1; ++dx) {
+        if (dx == 0 && dy == 0) continue;
+        float2 uv = float2((float(gid.x)+dx)/float(w), (float(gid.y)+dy)/float(h));
+        float4 n = feedbackTex.sample(s, uv);
+        maxLocal = max(maxLocal, n.r);
+    }
+    // If this pixel is a local max in R, boost all channels for a pop effect
+    if (feedback.rgb.r >= maxLocal - 0.001f && feedback.rgb.r > 0.25f) {
+        feedback.rgb = clamp(feedback.rgb * 1.7f + 0.15f, 0.0f, 1.0f);
+    }
 
     // Blend with the original pixel
     float4 src = input.read(gid);
