@@ -198,10 +198,24 @@ CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jaakkop/Documents/koodii/vjay_ace/src/app/ControlWindow.cpp -o CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.s
 
+CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o: CMakeFiles/vjay_ace.dir/flags.make
+CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o: /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PressureControlWindow.cpp
+CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o: CMakeFiles/vjay_ace.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o -MF CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o.d -o CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o -c /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PressureControlWindow.cpp
+
+CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PressureControlWindow.cpp > CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.i
+
+CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PressureControlWindow.cpp -o CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.s
+
 CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o: CMakeFiles/vjay_ace.dir/flags.make
 CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o: /Users/jaakkop/Documents/koodii/vjay_ace/src/app/CapsLockDetector.mm
 CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o: CMakeFiles/vjay_ace.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building OBJCXX object CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building OBJCXX object CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o"
 	/usr/bin/clang++ $(OBJCXX_DEFINES) $(OBJCXX_INCLUDES) -x objective-c++ $(OBJCXX_FLAGS) -MD -MT CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o -MF CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o.d -o CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o -c /Users/jaakkop/Documents/koodii/vjay_ace/src/app/CapsLockDetector.mm
 
 CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.i: cmake_force
@@ -215,7 +229,7 @@ CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.s: cmake_force
 CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o: CMakeFiles/vjay_ace.dir/flags.make
 CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o: /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PerformanceWindow.cpp
 CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o: CMakeFiles/vjay_ace.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o -MF CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o.d -o CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o -c /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PerformanceWindow.cpp
 
 CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.i: cmake_force
@@ -229,7 +243,7 @@ CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.s: cmake_force
 CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o: CMakeFiles/vjay_ace.dir/flags.make
 CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o: /Users/jaakkop/Documents/koodii/vjay_ace/src/app/MediaPickerWindow.mm
 CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o: CMakeFiles/vjay_ace.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building OBJCXX object CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building OBJCXX object CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o"
 	/usr/bin/clang++ $(OBJCXX_DEFINES) $(OBJCXX_INCLUDES) -x objective-c++ $(OBJCXX_FLAGS) -MD -MT CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o -MF CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o.d -o CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o -c /Users/jaakkop/Documents/koodii/vjay_ace/src/app/MediaPickerWindow.mm
 
 CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.i: cmake_force
@@ -243,7 +257,7 @@ CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.s: cmake_force
 CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o: CMakeFiles/vjay_ace.dir/flags.make
 CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o: /Users/jaakkop/Documents/koodii/vjay_ace/src/app/FxPatch.cpp
 CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o: CMakeFiles/vjay_ace.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o -MF CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o.d -o CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o -c /Users/jaakkop/Documents/koodii/vjay_ace/src/app/FxPatch.cpp
 
 CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.i: cmake_force
@@ -265,6 +279,7 @@ vjay_ace_OBJECTS = \
 "CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o" \
 "CMakeFiles/vjay_ace.dir/src/app/MetalCompositor.mm.o" \
 "CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o" \
+"CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o" \
 "CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o" \
 "CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o" \
 "CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o" \
@@ -282,6 +297,7 @@ vjay_ace: CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.o
 vjay_ace: CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o
 vjay_ace: CMakeFiles/vjay_ace.dir/src/app/MetalCompositor.mm.o
 vjay_ace: CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o
+vjay_ace: CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o
 vjay_ace: CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o
 vjay_ace: CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o
 vjay_ace: CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o
@@ -349,7 +365,7 @@ vjay_ace: /opt/homebrew/opt/opencv/lib/libopencv_photo.4.13.0.dylib
 vjay_ace: /opt/homebrew/opt/opencv/lib/libopencv_imgproc.4.13.0.dylib
 vjay_ace: /opt/homebrew/opt/opencv/lib/libopencv_core.4.13.0.dylib
 vjay_ace: CMakeFiles/vjay_ace.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Linking CXX executable vjay_ace"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Linking CXX executable vjay_ace"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/vjay_ace.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

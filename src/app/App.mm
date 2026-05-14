@@ -4,6 +4,8 @@
 #include <fstream>
 #include <csignal>
 #include <filesystem>
+#include <algorithm>
+#include <cmath>
 
 // ── Signal handling: save state on Ctrl-C / kill ─────────────────────────────
 static App* g_sigApp = nullptr;
@@ -58,6 +60,17 @@ static LIFNetwork::Topology topologyFromIndex(int index) {
 static const char* topologyIndexToName(int index) {
     static const char* names[] = {"Ring", "Fully", "Feedfwd", "Random", "SmWorld"};
     return names[std::clamp(index, 0, 4)];
+}
+
+static std::array<std::string, 24> pressureTargetNames() {
+    return {
+        "Zoom L0", "Zoom L1", "Zoom L2",
+        "Rotate L0", "Rotate L1", "Rotate L2",
+        "Opacity FX0", "Opacity FX1", "Opacity FX2",
+        "Audio Gain FX0", "Audio Gain FX1", "Audio Gain FX2",
+        "Pan L0 X", "Pan L0 Y", "Pan L1 X", "Pan L1 Y", "Pan L2 X", "Pan L2 Y",
+        "FX0 Param0", "FX0 Param1", "FX1 Param0", "FX1 Param1", "FX2 Param0", "FX2 Param1"
+    };
 }
 
 int App::lifNeuronCountFromNorm(float v) {
@@ -125,6 +138,12 @@ bool App::init() {
     mediaPickerWin_.open(ctrl.x + ctrlS.x / 2, ctrl.y,
                          ctrlS.x / 2, ctrlS.y / 2, stashRoot);
 
+    // Pressure mapping window in lower-right quarter of the primary screen.
+    const auto targetNames = pressureTargetNames();
+    pressureWin_.open(ctrl.x + ctrlS.x / 2, ctrl.y + ctrlS.y / 2,
+                      ctrlS.x / 2, ctrlS.y / 2,
+                      std::vector<std::string>(targetNames.begin(), targetNames.end()));
+
     // Pre-allocate composite texture (SFML side for preview)
     if (!compositeTex_.resize({WORK_W, WORK_H}))
         std::cerr << "[App] Cannot create composite SFML texture\n";
@@ -147,6 +166,9 @@ bool App::init() {
 
     // ── Scene state objects — reset all to -1 (unvisited) ────────────────
     for (auto& s : scenes_) s.reset();
+    scenePressureTargetNorm_.fill(0.0f);
+    scenePressureNorm_.fill(0.0f);
+    for (auto& ps : pressureSceneState_) ps.reset();
 
     wireCallbacks();
 
@@ -162,6 +184,13 @@ bool App::init() {
     controlWin_.setKnobMode(knobMode_);
     refreshKnobDisplay();
     if (currentScene_ >= 0) refreshKnobParamNames();
+    if (currentScene_ >= 0) {
+        pressureWin_.setSceneName(SCENES[currentScene_].name);
+        pressureWin_.setTargetStates(
+            std::vector<uint8_t>(pressureSceneState_[currentScene_].enabled.begin(), pressureSceneState_[currentScene_].enabled.end()),
+            std::vector<float>(pressureSceneState_[currentScene_].amount.begin(), pressureSceneState_[currentScene_].amount.end()));
+        controlWin_.setPressureNorm(scenePressureNorm_[currentScene_]);
+    }
 
     return true;
 }
@@ -174,9 +203,16 @@ void App::wireCallbacks() {
     midi_.onChannelPressure = [this](int channel, float normValue) {
         // Use channel pressure on channel 10 as scene-local FX modulation input.
         if (channel != 10 || currentScene_ < 0) return;
-        scenePressureNorm_[currentScene_] = std::clamp(normValue, 0.0f, 1.0f);
-        controlWin_.setPressureNorm(scenePressureNorm_[currentScene_]);
-        applyPressureModulatedFxParams(currentScene_);
+        scenePressureTargetNorm_[currentScene_] = std::clamp(normValue, 0.0f, 1.0f);
+    };
+
+    pressureWin_.onMappingChanged = [this](int targetIdx, bool enabled, float amount) {
+        if (currentScene_ < 0) return;
+        if (targetIdx < 0 || targetIdx >= NUM_PRESSURE_TARGETS) return;
+        pressureSceneState_[currentScene_].enabled[targetIdx] = enabled ? 1 : 0;
+        pressureSceneState_[currentScene_].amount[targetIdx] = std::clamp(amount, -1.0f, 1.0f);
+        applyPressureMappings(currentScene_);
+        saveState();
     };
     midi_.onModeChange = [this](KnobMode m){
         if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || imgXfadeKeyHeld_ || sceneXfadeKeyHeld_ || globalImgXfadeKeyHeld_ || globalSceneXfadeKeyHeld_ || globalOpacityKeyHeld_ || globalAudioGainKeyHeld_ || globalRotationKeyHeld_ || globalZoomKeyHeld_) return;  // modifier key overrides; ignore while held
@@ -682,27 +718,66 @@ void App::applySceneToEngine(int idx) {
         }
     }
 
-    // Apply scene-local pressure modulation on top of stored FxParam values.
-    applyPressureModulatedFxParams(idx);
+    // Apply scene-local pressure mappings on top of stored base values.
+    applyPressureMappings(idx);
 }
 
-void App::applyPressureModulatedFxParams(int sceneIdx) {
+void App::applyPressureMappings(int sceneIdx) {
     if (sceneIdx < 0 || sceneIdx >= NUM_SCENES) return;
-    const int fxMi = static_cast<int>(KnobMode::FxParam);
+
+    const auto& mapping = pressureSceneState_[sceneIdx];
+    const bool anyEnabled = std::any_of(mapping.enabled.begin(), mapping.enabled.end(),
+                                        [](uint8_t v) { return v != 0; });
+    if (!anyEnabled) return;
+
     const SceneState& s = scenes_[sceneIdx];
     const float pressure = std::clamp(scenePressureNorm_[sceneIdx], 0.0f, 1.0f);
-    constexpr float kPressureDepth = 0.35f;
+    const int fxMi = static_cast<int>(KnobMode::FxParam);
+    const int panMi = static_cast<int>(KnobMode::ImgPan);
 
+    auto modulated = [&](int targetIdx, float base) {
+        if (!mapping.enabled[targetIdx]) return base;
+        return std::clamp(base + pressure * mapping.amount[targetIdx], 0.0f, 1.0f);
+    };
+
+    // Zoom L0..L2 targets [0..2]
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
+        applyKnob(slot * 2, modulated(slot, effectiveZoomNorm(sceneIdx, slot)), KnobMode::ImgZoom);
+
+    // Rotate L0..L2 targets [3..5]
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
+        applyKnob(slot * 2, modulated(3 + slot, effectiveRotationNorm(sceneIdx, slot)), KnobMode::ImgRotate);
+
+    // Opacity FX0..FX2 targets [6..8]
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot)
+        applyKnob(slot * 2, modulated(6 + slot, effectiveLayerOpacityNorm(sceneIdx, slot)), KnobMode::LayerLevel);
+
+    // Audio gain FX0..FX2 targets [9..11]
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot)
+        applyKnob(slot * 2, modulated(9 + slot, effectiveAudioGainNorm(sceneIdx, slot)), KnobMode::FxAudio);
+
+    // Pan targets [12..17]
+    for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
+        const int xKnob = slot * 2;
+        const int yKnob = xKnob + 1;
+        float baseX = s.knobs[panMi][xKnob] >= 0.0f ? s.knobs[panMi][xKnob] : 0.5f;
+        float baseY = s.knobs[panMi][yKnob] >= 0.0f ? s.knobs[panMi][yKnob] : 0.5f;
+        applyKnob(xKnob, modulated(12 + slot * 2, baseX), KnobMode::ImgPan);
+        applyKnob(yKnob, modulated(13 + slot * 2, baseY), KnobMode::ImgPan);
+    }
+
+    // FX params [18..23]
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
         float p0 = s.knobs[fxMi][slot * 2];
         float p1 = s.knobs[fxMi][slot * 2 + 1];
         if (p0 < 0.0f) p0 = 0.5f;
         if (p1 < 0.0f) p1 = 0.5f;
 
-        float p1Mod = std::clamp(p1 + pressure * kPressureDepth, 0.0f, 1.0f);
+        p0 = modulated(18 + slot * 2, p0);
+        p1 = modulated(19 + slot * 2, p1);
         fxPatches_[slot].p[0] = p0;
-        fxPatches_[slot].p[1] = p1Mod;
-        compositor_.setFxParams(slot, p0, p1Mod);
+        fxPatches_[slot].p[1] = p1;
+        compositor_.setFxParams(slot, p0, p1);
     }
 }
 
@@ -975,8 +1050,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         }
     }
     applyKnob(knobIdx, normValue, eff);
-    if (eff == KnobMode::FxParam)
-        applyPressureModulatedFxParams(currentScene_);
+    applyPressureMappings(currentScene_);
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
 
@@ -1069,6 +1143,12 @@ void App::onSceneSelect(int sceneIdx) {
     }
     controlWin_.setSceneName(sc.name);
     mediaPickerWin_.setSceneName(sc.name);
+    pressureWin_.setSceneName(sc.name);
+    pressureWin_.setTargetStates(
+        std::vector<uint8_t>(pressureSceneState_[sceneIdx].enabled.begin(), pressureSceneState_[sceneIdx].enabled.end()),
+        std::vector<float>(pressureSceneState_[sceneIdx].amount.begin(), pressureSceneState_[sceneIdx].amount.end()));
+    controlWin_.setPressureNorm(scenePressureNorm_[sceneIdx]);
+    scenePressureTargetNorm_[sceneIdx] = scenePressureNorm_[sceneIdx];
 
     // Load this scene's image files into the 3 source layers.
     // Changed paths are crossfaded; unchanged paths are still reloaded to reset playback.
@@ -1232,8 +1312,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
     }
     knobLastPhys_[knobIdx] = normValue;
     applyKnob(knobIdx, normValue, eff);
-    if (eff == KnobMode::FxParam)
-        applyPressureModulatedFxParams(currentScene_);
+    applyPressureMappings(currentScene_);
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
 
@@ -1274,11 +1353,12 @@ void App::saveState() const {
         if (!f) { std::cerr << "[App] Could not open temp state file for writing\n"; return; }
         // Write magic + version for future-proofing
         const uint32_t magic = 0x56414345; // 'VACE'
-        const uint32_t ver   = 10;
+        const uint32_t ver   = 12;
         f.write(reinterpret_cast<const char*>(&magic), 4);
         f.write(reinterpret_cast<const char*>(&ver),   4);
         // Write all scene states (knobs + image paths)
-        for (const auto& s : scenes_) {
+        for (int si = 0; si < NUM_SCENES; ++si) {
+            const auto& s = scenes_[si];
             for (const auto& row : s.knobs)
                 for (float v : row)
                     f.write(reinterpret_cast<const char*>(&v), sizeof(float));
@@ -1294,6 +1374,11 @@ void App::saveState() const {
                 f.write(reinterpret_cast<const char*>(&len), sizeof(len));
                 if (len) f.write(p.data(), len);
             }
+            const auto& ps = pressureSceneState_[si];
+            for (uint8_t e : ps.enabled)
+                f.write(reinterpret_cast<const char*>(&e), sizeof(uint8_t));
+            for (float a : ps.amount)
+                f.write(reinterpret_cast<const char*>(&a), sizeof(float));
         }
         f.write(reinterpret_cast<const char*>(&currentScene_), sizeof(int));
         if (!f) { std::cerr << "[App] State write error — temp file may be incomplete\n"; return; }
@@ -1321,6 +1406,8 @@ void App::loadState() {
     // v8: per-scene image-load and scene-change crossfade speed settings
     // v9: per-scene LIF topology and neuron count settings
     // v10: 32 scenes (added second 16-note scene bank, starts at E3)
+    // v11: per-scene pressure mapping settings (21 targets)
+    // v12: pressure mapping includes opacity targets (24 targets)
     const bool isV3 = (ver == 3);
     const bool isV4 = (ver == 4);
     const bool isV5 = (ver == 5);
@@ -1329,12 +1416,14 @@ void App::loadState() {
     const bool isV8 = (ver == 8);
     const bool isV9 = (ver == 9);
     const bool isV10 = (ver == 10);
-    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7 && !isV8 && !isV9 && !isV10) {
+    const bool isV11 = (ver == 11);
+    const bool isV12 = (ver == 12);
+    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7 && !isV8 && !isV9 && !isV10 && !isV11 && !isV12) {
         std::cerr << "[App] Ignoring incompatible state file\n";
         return;
     }
     // Older saves have 14 or 16 scenes. v10+ saves all NUM_SCENES.
-    const int savedSceneCount = isV10 ? NUM_SCENES : (isV6 || isV7 || isV8 || isV9) ? 16 : 14;
+    const int savedSceneCount = (isV10 || isV11 || isV12) ? NUM_SCENES : (isV6 || isV7 || isV8 || isV9) ? 16 : 14;
     for (int si = 0; si < savedSceneCount && si < NUM_SCENES; ++si) {
         auto& s = scenes_[si];
         // v3=3 modes, v4=4, v5/v6=5, v7=6
@@ -1360,6 +1449,19 @@ void App::loadState() {
             if (len > 4096) return; // sanity guard
             p.resize(len);
             if (len) { if (!f.read(p.data(), len)) return; }
+        }
+        if (isV11 || isV12) {
+            const int savedPressureTargets = isV11 ? 21 : NUM_PRESSURE_TARGETS;
+            for (int i = 0; i < savedPressureTargets; ++i) {
+                uint8_t e = 0;
+                if (!f.read(reinterpret_cast<char*>(&e), sizeof(uint8_t))) return;
+                if (i < NUM_PRESSURE_TARGETS) pressureSceneState_[si].enabled[i] = e;
+            }
+            for (int i = 0; i < savedPressureTargets; ++i) {
+                float a = 0.0f;
+                if (!f.read(reinterpret_cast<char*>(&a), sizeof(float))) return;
+                if (i < NUM_PRESSURE_TARGETS) pressureSceneState_[si].amount[i] = a;
+            }
         }
     }
     int savedScene = -1;
@@ -1419,6 +1521,24 @@ void App::processFrame() {
     // Update pan/zoom animation (60 FPS = ~0.0167s per frame)
     updatePanZoomAnimation(1.0f / 60.0f);
 
+    // Smooth rough pressure data (low-pass + slew limit + deadband), then apply mappings.
+    if (currentScene_ >= 0) {
+        float cur = scenePressureNorm_[currentScene_];
+        const float target = scenePressureTargetNorm_[currentScene_];
+        const float diff = target - cur;
+        if (std::fabs(diff) <= PRESSURE_DEADBAND) {
+            cur = target;
+        } else {
+            const float desired = cur + diff * PRESSURE_SMOOTH_ALPHA;
+            float step = desired - cur;
+            step = std::clamp(step, -PRESSURE_SLEW_MAX_PER_FRAME, PRESSURE_SLEW_MAX_PER_FRAME);
+            cur = std::clamp(cur + step, 0.0f, 1.0f);
+        }
+        scenePressureNorm_[currentScene_] = cur;
+        controlWin_.setPressureNorm(cur);
+        applyPressureMappings(currentScene_);
+    }
+
     // ── Audio poll: read latest bands and push to compositor + meter ─────
     if (!audioBypassed_ && audio_.isRunning()) {
         auto bands = audio_.bands();
@@ -1447,14 +1567,17 @@ void App::run() {
         if (!controlWin_.handleEvents()) break;
         if (!perfWin_.handleEvents())    break;
         if (mediaPickerWin_.isOpen()) mediaPickerWin_.handleEvents();
+        if (pressureWin_.isOpen()) pressureWin_.handleEvents();
         controlWin_.update();
         processFrame();
         controlWin_.render(compositeTex_);
         if (mediaPickerWin_.isOpen()) mediaPickerWin_.render();
+        if (pressureWin_.isOpen()) pressureWin_.render();
     }
     std::cerr << "[App] Shutdown requested; saving state...\n";
     saveState();
     std::cerr << "[App] Shutdown save completed\n";
     controlWin_.close();
     perfWin_.close();
+    pressureWin_.close();
 }

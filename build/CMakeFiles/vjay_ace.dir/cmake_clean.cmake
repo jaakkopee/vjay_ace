@@ -21,6 +21,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/vjay_ace.dir/src/app/MidiRouter.cpp.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o"
   "CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o.d"
+  "CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o"
+  "CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o"
   "CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/main.mm.o"

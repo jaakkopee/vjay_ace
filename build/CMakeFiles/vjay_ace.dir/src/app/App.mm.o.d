@@ -1973,6 +1973,7 @@ CMakeFiles/vjay_ace.dir/src/app/App.mm.o: \
   /opt/homebrew/opt/tgui/include/TGUI/Backend/Renderer/SFML-Graphics/CanvasSFML.hpp \
   /opt/homebrew/opt/tgui/include/TGUI/Widgets/CanvasBase.hpp \
   /opt/homebrew/opt/tgui/include/TGUI/Backend/Font/SFML-Graphics/BackendFontSFML.hpp \
+  /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PressureControlWindow.h \
   /Users/jaakkop/Documents/koodii/vjay_ace/src/app/PerformanceWindow.h \
   /Users/jaakkop/Documents/koodii/vjay_ace/src/app/MediaPickerWindow.h \
   /Users/jaakkop/Documents/koodii/vjay_ace/src/app/AudioAnalyzer.h \

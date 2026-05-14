@@ -4,6 +4,7 @@
 #include "MidiRouter.h"
 #include "MetalCompositor.h"
 #include "ControlWindow.h"
+#include "PressureControlWindow.h"
 #include "PerformanceWindow.h"
 #include "MediaPickerWindow.h"
 #include "AudioAnalyzer.h"
@@ -82,6 +83,7 @@ private:
     MetalCompositor   compositor_;
     AudioAnalyzer     audio_;
     ControlWindow     controlWin_;
+    PressureControlWindow pressureWin_;
     PerformanceWindow perfWin_;
     MediaPickerWindow mediaPickerWin_;
 
@@ -138,8 +140,23 @@ private:
     std::array<uint32_t, NUM_SRC_LAYERS> globalRotationVersion_ = {0, 0, 0};
     std::array<float, NUM_SRC_LAYERS> globalZoomNorm_ = {0.5f, 0.5f, 0.5f};  // 0.5 = 1.0x zoom
     std::array<uint32_t, NUM_SRC_LAYERS> globalZoomVersion_ = {0, 0, 0};
-    // Scene-local channel pressure value (0..1), driven by MIDI channel pressure.
+    // Scene-local channel pressure values (0..1): target from MIDI + smoothed value used for modulation.
+    std::array<float, NUM_SCENES> scenePressureTargetNorm_ = {};
     std::array<float, NUM_SCENES> scenePressureNorm_ = {};
+    static constexpr float PRESSURE_SMOOTH_ALPHA = 0.22f;
+    static constexpr float PRESSURE_SLEW_MAX_PER_FRAME = 0.035f;
+    static constexpr float PRESSURE_DEADBAND = 0.003f;
+
+    static constexpr int NUM_PRESSURE_TARGETS = 24;
+    struct PressureSceneState {
+        std::array<uint8_t, NUM_PRESSURE_TARGETS> enabled{};
+        std::array<float, NUM_PRESSURE_TARGETS> amount{};
+        void reset() {
+            enabled.fill(0);
+            amount.fill(0.0f);
+        }
+    };
+    std::array<PressureSceneState, NUM_SCENES> pressureSceneState_;
 
     // Pan/zoom animation state (when changing scenes)
     bool panZoomAnimating_ = false;
@@ -203,8 +220,8 @@ private:
     static float normFromLIFNeuronCount(int neuronCount);
     // Push all stored values in scenes_[idx] to the engine.
     void applySceneToEngine(int idx);
-    // Apply per-scene pressure modulation to FX params without overwriting stored knob values.
-    void applyPressureModulatedFxParams(int sceneIdx);
+    // Apply per-scene pressure modulation mappings without overwriting stored scene values.
+    void applyPressureMappings(int sceneIdx);
     // Sync all 6 knob arc widgets to the active scene's stored values.
     void refreshKnobDisplay();
     // Update knob param name labels based on active scene's FX patches.

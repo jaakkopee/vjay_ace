@@ -323,6 +323,30 @@ src/app/PerformanceWindow.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.s
 .PHONY : src/app/PerformanceWindow.cpp.s
 
+src/app/PressureControlWindow.o: src/app/PressureControlWindow.cpp.o
+.PHONY : src/app/PressureControlWindow.o
+
+# target to build an object file
+src/app/PressureControlWindow.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o
+.PHONY : src/app/PressureControlWindow.cpp.o
+
+src/app/PressureControlWindow.i: src/app/PressureControlWindow.cpp.i
+.PHONY : src/app/PressureControlWindow.i
+
+# target to preprocess a source file
+src/app/PressureControlWindow.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.i
+.PHONY : src/app/PressureControlWindow.cpp.i
+
+src/app/PressureControlWindow.s: src/app/PressureControlWindow.cpp.s
+.PHONY : src/app/PressureControlWindow.s
+
+# target to generate assembly for a file
+src/app/PressureControlWindow.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.s
+.PHONY : src/app/PressureControlWindow.cpp.s
+
 src/app/VideoDecoder.o: src/app/VideoDecoder.cpp.o
 .PHONY : src/app/VideoDecoder.o
 
@@ -435,6 +459,9 @@ help:
 	@echo "... src/app/PerformanceWindow.o"
 	@echo "... src/app/PerformanceWindow.i"
 	@echo "... src/app/PerformanceWindow.s"
+	@echo "... src/app/PressureControlWindow.o"
+	@echo "... src/app/PressureControlWindow.i"
+	@echo "... src/app/PressureControlWindow.s"
 	@echo "... src/app/VideoDecoder.o"
 	@echo "... src/app/VideoDecoder.i"
 	@echo "... src/app/VideoDecoder.s"

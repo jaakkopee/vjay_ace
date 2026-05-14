@@ -13,6 +13,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/LayerManager.cpp" "CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/MidiRouter.cpp" "CMakeFiles/vjay_ace.dir/src/app/MidiRouter.cpp.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/MidiRouter.cpp.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/PerformanceWindow.cpp" "CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/PerformanceWindow.cpp.o.d"
+  "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/PressureControlWindow.cpp" "CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/VideoDecoder.cpp" "CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/VideoDecoder.cpp.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/App.mm" "CMakeFiles/vjay_ace.dir/src/app/App.mm.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/App.mm.o.d"
   "/Users/jaakkop/Documents/koodii/vjay_ace/src/app/AudioAnalyzer.mm" "CMakeFiles/vjay_ace.dir/src/app/AudioAnalyzer.mm.o" "gcc" "CMakeFiles/vjay_ace.dir/src/app/AudioAnalyzer.mm.o.d"
