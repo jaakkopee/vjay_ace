@@ -5,6 +5,8 @@
 
 class LIFNetwork {
 public:
+    static constexpr int NUM_TONE_BINS = 16;
+
     enum class Topology {
         Ring = 0,
         FullyConnected = 1,
@@ -36,6 +38,10 @@ public:
 
     Topology topology() const { return topology_; }
     int neuronCount() const { return neuronCount_; }
+
+    // Sample a vertical column of network activity.
+    // phase01 selects horizontal position (0..1) and output bins map top->bottom rows.
+    std::array<float, NUM_TONE_BINS> sampleColumn(float phase01) const;
 
 private:
     id<MTLDevice> device_ = nil;

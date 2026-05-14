@@ -235,6 +235,30 @@ src/app/LIFNetwork.mm.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LIFNetwork.mm.o
 .PHONY : src/app/LIFNetwork.mm.o
 
+src/app/LIFToneSynth.o: src/app/LIFToneSynth.cpp.o
+.PHONY : src/app/LIFToneSynth.o
+
+# target to build an object file
+src/app/LIFToneSynth.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LIFToneSynth.cpp.o
+.PHONY : src/app/LIFToneSynth.cpp.o
+
+src/app/LIFToneSynth.i: src/app/LIFToneSynth.cpp.i
+.PHONY : src/app/LIFToneSynth.i
+
+# target to preprocess a source file
+src/app/LIFToneSynth.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LIFToneSynth.cpp.i
+.PHONY : src/app/LIFToneSynth.cpp.i
+
+src/app/LIFToneSynth.s: src/app/LIFToneSynth.cpp.s
+.PHONY : src/app/LIFToneSynth.s
+
+# target to generate assembly for a file
+src/app/LIFToneSynth.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/LIFToneSynth.cpp.s
+.PHONY : src/app/LIFToneSynth.cpp.s
+
 src/app/LayerManager.o: src/app/LayerManager.cpp.o
 .PHONY : src/app/LayerManager.o
 
@@ -448,6 +472,9 @@ help:
 	@echo "... src/app/FxPatch.i"
 	@echo "... src/app/FxPatch.s"
 	@echo "... src/app/LIFNetwork.o"
+	@echo "... src/app/LIFToneSynth.o"
+	@echo "... src/app/LIFToneSynth.i"
+	@echo "... src/app/LIFToneSynth.s"
 	@echo "... src/app/LayerManager.o"
 	@echo "... src/app/LayerManager.i"
 	@echo "... src/app/LayerManager.s"

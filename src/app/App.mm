@@ -89,7 +89,9 @@ float App::normFromLIFNeuronCount(int neuronCount) {
 // ── App ───────────────────────────────────────────────────────────────────────
 
 App::App() = default;
-App::~App() = default;
+App::~App() {
+    lifToneSynth_.stopStream();
+}
 
 bool App::init() {
     // ── Register signal handlers so Ctrl-C saves state before exit ───────
@@ -160,6 +162,9 @@ bool App::init() {
     // ── Audio capture ─────────────────────────────────────────────────
     if (!audio_.start())
         std::cerr << "[App] Audio capture unavailable (no mic/line-in?)\n";
+
+    if (!lifToneSynth_.startStream())
+        std::cerr << "[App] LIF tone synth init failed\n";
 
     // ── Knob pickup state ────────────────────────────────────────────────
     knobLastPhys_.fill(0.5f);
@@ -1320,6 +1325,8 @@ void App::onKnobDrag(int knobIdx, float normValue) {
 
 void App::onImageSelected(int slotIdx, const std::string& path) {
     if (slotIdx < 0 || slotIdx >= NUM_SRC_LAYERS) return;
+    if (currentScene_ < 0)
+        onSceneSelect(0);
     const int layerIdx = slotIdx * 2;
     const bool samePathAsLoaded = (layers_.state(layerIdx).mediaPath == path);
 
@@ -1369,7 +1376,8 @@ void App::saveState() const {
             f.write(reinterpret_cast<const char*>(&s.lifTopologyIndex), sizeof(int));
             f.write(reinterpret_cast<const char*>(&s.lifNeuronCount), sizeof(int));
             // Write 3 image paths as length-prefixed strings.
-            for (const auto& p : s.imgPaths) {
+            for (int i = 0; i < NUM_SRC_LAYERS; ++i) {
+                const auto& p = s.imgPaths[i];
                 uint32_t len = static_cast<uint32_t>(p.size());
                 f.write(reinterpret_cast<const char*>(&len), sizeof(len));
                 if (len) f.write(p.data(), len);
@@ -1431,25 +1439,26 @@ void App::loadState() {
         for (int mi = 0; mi < savedModes; ++mi)
             for (float& v : s.knobs[mi])
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
-        if (isV8 || isV9 || isV10) {
+        if (isV8 || isV9 || isV10 || isV11 || isV12) {
             for (float& v : s.imageCrossfadeSpeedNorm)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
             for (float& v : s.sceneCrossfadeSpeedNorm)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
         }
-        if (isV9 || isV10) {
+        if (isV9 || isV10 || isV11 || isV12) {
             if (!f.read(reinterpret_cast<char*>(&s.lifTopologyIndex), sizeof(int))) return;
             if (!f.read(reinterpret_cast<char*>(&s.lifNeuronCount), sizeof(int))) return;
         }
-        // Rows beyond what was saved remain at -1 (default from reset())
         // Read 3 image paths
-        for (auto& p : s.imgPaths) {
+        for (int i = 0; i < NUM_SRC_LAYERS; ++i) {
+            auto& p = s.imgPaths[i];
             uint32_t len = 0;
             if (!f.read(reinterpret_cast<char*>(&len), sizeof(len))) return;
             if (len > 4096) return; // sanity guard
             p.resize(len);
             if (len) { if (!f.read(p.data(), len)) return; }
-        }
+            if (len > 0) std::cout << "[App] loadState: scene=" << si << " slot=" << i << " path=" << p << std::endl;
+            }
         if (isV11 || isV12) {
             const int savedPressureTargets = isV11 ? 21 : NUM_PRESSURE_TARGETS;
             for (int i = 0; i < savedPressureTargets; ++i) {
@@ -1485,7 +1494,9 @@ void App::loadState() {
         // Load persisted images
         for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
             const std::string& path = scenes_[currentScene_].imgPaths[slot];
-            if (!path.empty()) layers_.loadMedia(slot * 2, path);
+            if (!path.empty()) {
+                layers_.loadMedia(slot * 2, path);
+            }
         }
         mediaPickerWin_.setSlotPaths(scenes_[currentScene_].imgPaths);
         ensureSceneTransformDefaults(currentScene_);
@@ -1553,9 +1564,16 @@ void App::processFrame() {
 
     // GPU composite → CPU readback
     if (compositor_.composite(compositePixels_)) {
+        // Experimental sonification: horizontal scan = time, vertical bins = pitch.
+        lifToneScanPhase_ += (1.0f / 60.0f) * 0.22f;
+        if (lifToneScanPhase_ >= 1.0f)
+            lifToneScanPhase_ -= 1.0f;
+        lifToneSynth_.setColumnEnergies(compositor_.sampleLIFColumn(lifToneScanPhase_));
+
         perfWin_.present(compositePixels_);
         compositeTex_.update(compositePixels_.data());
     } else {
+        lifToneSynth_.setColumnEnergies({});
         perfWin_.clearBlack();
     }
 }
@@ -1577,6 +1595,7 @@ void App::run() {
     std::cerr << "[App] Shutdown requested; saving state...\n";
     saveState();
     std::cerr << "[App] Shutdown save completed\n";
+    lifToneSynth_.stopStream();
     controlWin_.close();
     perfWin_.close();
     pressureWin_.close();

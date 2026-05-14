@@ -71,6 +71,7 @@ public:
 
     void setLIFTopology(LIFNetwork::Topology topology);
     void setLIFNeuronCount(int neuronCount);
+    std::array<float, LIFNetwork::NUM_TONE_BINS> sampleLIFColumn(float phase01) const;
 
     // Begin a crossfade for a source slot — call BEFORE uploading the new image.
     // Captures the current frame and resets the blend progress to 0.

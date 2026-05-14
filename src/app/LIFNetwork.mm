@@ -246,3 +246,29 @@ void LIFNetwork::step(id<MTLCommandBuffer> cmdBuffer,
 
     readIndex_ = writeIndex;
 }
+
+std::array<float, LIFNetwork::NUM_TONE_BINS> LIFNetwork::sampleColumn(float phase01) const {
+    std::array<float, NUM_TONE_BINS> bins{};
+    if (!stateBuf_[readIndex_] || neuronCount_ <= 0 || gridSize_ <= 0)
+        return bins;
+
+    const auto* state = static_cast<const simd::float4*>([stateBuf_[readIndex_] contents]);
+    if (!state)
+        return bins;
+
+    const int x = std::clamp(static_cast<int>(phase01 * static_cast<float>(gridSize_ - 1)), 0, gridSize_ - 1);
+    for (int b = 0; b < NUM_TONE_BINS; ++b) {
+        const float normY = (static_cast<float>(b) + 0.5f) / static_cast<float>(NUM_TONE_BINS);
+        const int y = std::clamp(static_cast<int>(normY * static_cast<float>(gridSize_ - 1)), 0, gridSize_ - 1);
+        const int idx = y * gridSize_ + x;
+        if (idx >= neuronCount_) {
+            bins[b] = 0.0f;
+            continue;
+        }
+        // x=membrane potential, y=spike indicator; combine for a richer tone envelope.
+        const float membrane = std::clamp(state[idx].x, 0.0f, 1.0f);
+        const float spike = std::clamp(state[idx].y, 0.0f, 1.0f);
+        bins[b] = std::clamp(membrane * 0.8f + spike * 0.6f, 0.0f, 1.0f);
+    }
+    return bins;
+}

@@ -8,6 +8,7 @@
 #include "PerformanceWindow.h"
 #include "MediaPickerWindow.h"
 #include "AudioAnalyzer.h"
+#include "LIFToneSynth.h"
 #include <vector>
 #include <memory>
 #include <cstdint>
@@ -82,6 +83,7 @@ private:
     MidiRouter        midi_;
     MetalCompositor   compositor_;
     AudioAnalyzer     audio_;
+    LIFToneSynth      lifToneSynth_;
     ControlWindow     controlWin_;
     PressureControlWindow pressureWin_;
     PerformanceWindow perfWin_;
@@ -176,6 +178,7 @@ private:
     // Composited pixel output
     std::vector<uint8_t> compositePixels_;
     sf::Texture          compositeTex_;
+    float                lifToneScanPhase_ = 0.0f;
 
     // ── Wiring ───────────────────────────────────────────────────────────
     void wireCallbacks();

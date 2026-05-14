@@ -261,6 +261,12 @@ void MetalCompositor::setLIFNeuronCount(int neuronCount) {
         lifNetwork_->setNeuronCount(neuronCount);
 }
 
+std::array<float, LIFNetwork::NUM_TONE_BINS> MetalCompositor::sampleLIFColumn(float phase01) const {
+    if (!lifNetwork_)
+        return {};
+    return lifNetwork_->sampleColumn(phase01);
+}
+
 void MetalCompositor::beginCrossfade(int srcSlot) {
     assert(srcSlot >= 0 && srcSlot < NUM_SRC_LAYERS);
     // Capture the current source frame into crossfadeTex_ before the new image arrives.

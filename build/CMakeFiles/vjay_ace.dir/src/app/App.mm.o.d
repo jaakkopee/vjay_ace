@@ -1987,6 +1987,12 @@ CMakeFiles/vjay_ace.dir/src/app/App.mm.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/atomic_unique_lock.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/intrusive_list_view.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_token.h \
+  /Users/jaakkop/Documents/koodii/vjay_ace/src/app/LIFToneSynth.h \
+  /opt/homebrew/opt/sfml/include/SFML/Audio/SoundStream.hpp \
+  /opt/homebrew/opt/sfml/include/SFML/Audio/Export.hpp \
+  /opt/homebrew/opt/sfml/include/SFML/Audio/SoundChannel.hpp \
+  /opt/homebrew/opt/sfml/include/SFML/Audio/SoundSource.hpp \
+  /opt/homebrew/opt/sfml/include/SFML/Audio/AudioResource.hpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AppKit.framework/Headers/AppKit.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AppKit.framework/Headers/AppKitDefines.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AppKit.framework/Headers/AppKitErrors.h \

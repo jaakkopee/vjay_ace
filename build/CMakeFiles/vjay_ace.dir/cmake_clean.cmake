@@ -11,6 +11,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/vjay_ace.dir/src/app/FxPatch.cpp.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/LIFNetwork.mm.o"
   "CMakeFiles/vjay_ace.dir/src/app/LIFNetwork.mm.o.d"
+  "CMakeFiles/vjay_ace.dir/src/app/LIFToneSynth.cpp.o"
+  "CMakeFiles/vjay_ace.dir/src/app/LIFToneSynth.cpp.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.o"
   "CMakeFiles/vjay_ace.dir/src/app/LayerManager.cpp.o.d"
   "CMakeFiles/vjay_ace.dir/src/app/MediaPickerWindow.mm.o"
