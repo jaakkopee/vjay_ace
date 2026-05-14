@@ -49,6 +49,17 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     shiftLockLabel_->getRenderer()->setTextColor(TEXT_DIM);
     gui_.add(shiftLockLabel_);
 
+    // ── Pressure meter ─────────────────────────────────────────────────────────
+    pressureLabel_ = tgui::Label::create("Pressure CH10: 0%");
+    pressureLabel_->setPosition(14, 88);
+    pressureLabel_->setTextSize(12);
+    pressureLabel_->getRenderer()->setTextColor(tgui::Color(170, 220, 255));
+    gui_.add(pressureLabel_);
+
+    pressureMeterCanvas_ = tgui::CanvasSFML::create({static_cast<float>(leftColW_ - 28), 14.0f});
+    pressureMeterCanvas_->setPosition(14, 106);
+    gui_.add(pressureMeterCanvas_);
+
     // ── 6 knobs: 2 rows × 3 columns ─────────────────────────────────────────────────
     // Row 0 (knobs 0-2): y=112; row 1 (knobs 3-5): y=112+KNOB_SIZE+90
     const int rowYBase[2] = { 112, 112 + KNOB_SIZE + 90 };
@@ -199,6 +210,15 @@ void ControlWindow::setKnobMode(KnobMode mode) {
                             + "  |  CC: 3  9  12  13  14  15");
 }
 
+void ControlWindow::setPressureNorm(float norm) {
+    pressureNorm_ = std::clamp(norm, 0.0f, 1.0f);
+    if (pressureLabel_) {
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "Pressure CH10: %d%%", static_cast<int>(pressureNorm_ * 100.0f + 0.5f));
+        pressureLabel_->setText(buf);
+    }
+}
+
 // ── Input handling ────────────────────────────────────────────────────────────────────
 void ControlWindow::onMousePressed(float x, float y) {
     for (int i = 0; i < NUM_KNOBS; ++i) {
@@ -331,8 +351,38 @@ void ControlWindow::update() {
     }
     bKeyWas_ = bNow;
 
+    // Redraw pressure meter each frame
+    drawPressureMeter();
+
     // Redraw audio meter each frame
     drawAudioMeter();
+}
+
+void ControlWindow::drawPressureMeter() {
+    if (!pressureMeterCanvas_) return;
+    auto& rt = pressureMeterCanvas_->getRenderTexture();
+    pressureMeterCanvas_->clear(tgui::Color(12, 12, 24));
+
+    const float w = static_cast<float>(pressureMeterCanvas_->getSize().x);
+    const float h = static_cast<float>(pressureMeterCanvas_->getSize().y);
+
+    sf::RectangleShape bg({w - 2.0f, h - 2.0f});
+    bg.setPosition({1.0f, 1.0f});
+    bg.setFillColor(sf::Color(30, 35, 55));
+    rt.draw(bg);
+
+    const float fillW = (w - 2.0f) * pressureNorm_;
+    if (fillW > 1.0f) {
+        uint8_t r = static_cast<uint8_t>(80.0f + pressureNorm_ * 160.0f);
+        uint8_t g = static_cast<uint8_t>(170.0f - pressureNorm_ * 80.0f);
+        uint8_t b = static_cast<uint8_t>(255.0f - pressureNorm_ * 180.0f);
+        sf::RectangleShape fill({fillW, h - 2.0f});
+        fill.setPosition({1.0f, 1.0f});
+        fill.setFillColor(sf::Color(r, g, b, 230));
+        rt.draw(fill);
+    }
+
+    pressureMeterCanvas_->display();
 }
 
 void ControlWindow::setAudioBands(const float* bands, int count, float rms) {

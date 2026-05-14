@@ -80,9 +80,18 @@ void MidiRouter::processEvent(const std::vector<unsigned char>& msg) {
         ev.type  = MidiEvent::Type::CC;
         ev.cc    = msg[1];
         ev.value = msg[2];
+    } else if (status == 0xD0 && msg.size() >= 2) {
+        ev.type     = MidiEvent::Type::ChannelPressure;
+        ev.pressure = msg[1];
     }
 
     if (onAnyEvent) onAnyEvent(ev);
+
+    if (ev.type == MidiEvent::Type::ChannelPressure) {
+        if (onChannelPressure)
+            onChannelPressure(ev.channel, ccToNorm(ev.pressure));
+        return;
+    }
 
     // ── Scene select ─────────────────────────────────────────────────────
     if (ev.type == MidiEvent::Type::NoteOn) {

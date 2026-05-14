@@ -111,6 +111,9 @@ public:
     // Update audio level meter (8 bands 0-1, rms 0-1). Called each frame.
     void setAudioBands(const float* bands, int count, float rms);
 
+    // Update channel pressure meter (0-1).
+    void setPressureNorm(float norm);
+
 private:
     sf::RenderWindow window_;
     tgui::Gui        gui_;
@@ -129,6 +132,7 @@ private:
     tgui::Label::Ptr sceneLabel_;
     tgui::Label::Ptr modeLabel_;
     tgui::Label::Ptr shiftLockLabel_;
+    tgui::Label::Ptr pressureLabel_;
     tgui::Panel::Ptr rightPanel_;
     int              leftColW_ = 0;
 
@@ -160,10 +164,13 @@ private:
     // Audio bands for meter drawing (8 bands + RMS)
     std::array<float, 8> audioBands_ = {};
     float audioRms_ = 0.0f;
+    float pressureNorm_ = 0.0f;
     tgui::CanvasSFML::Ptr audioMeterCanvas_;
+    tgui::CanvasSFML::Ptr pressureMeterCanvas_;
 
     void buildGui(int width, int height);
     void drawKnob(int knobIdx);
+    void drawPressureMeter();
     void drawAudioMeter();
     void onMousePressed(float x, float y);
     void onMouseReleased();

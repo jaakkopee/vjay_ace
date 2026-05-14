@@ -171,6 +171,13 @@ bool App::init() {
 void App::wireCallbacks() {
     midi_.onKnob = [this](int k, float v, KnobMode m){ onKnob(k, v, m); };
     midi_.onSceneSelect = [this](int idx){ onSceneSelect(idx); };
+    midi_.onChannelPressure = [this](int channel, float normValue) {
+        // Use channel pressure on channel 10 as scene-local FX modulation input.
+        if (channel != 10 || currentScene_ < 0) return;
+        scenePressureNorm_[currentScene_] = std::clamp(normValue, 0.0f, 1.0f);
+        controlWin_.setPressureNorm(scenePressureNorm_[currentScene_]);
+        applyPressureModulatedFxParams(currentScene_);
+    };
     midi_.onModeChange = [this](KnobMode m){
         if (rKeyHeld_ || zKeyHeld_ || oKeyHeld_ || gKeyHeld_ || pKeyHeld_ || imgXfadeKeyHeld_ || sceneXfadeKeyHeld_ || globalImgXfadeKeyHeld_ || globalSceneXfadeKeyHeld_ || globalOpacityKeyHeld_ || globalAudioGainKeyHeld_ || globalRotationKeyHeld_ || globalZoomKeyHeld_) return;  // modifier key overrides; ignore while held
         knobMode_ = m;
@@ -674,6 +681,29 @@ void App::applySceneToEngine(int idx) {
                 applyKnob(k, s.knobs[mi][k], mode);
         }
     }
+
+    // Apply scene-local pressure modulation on top of stored FxParam values.
+    applyPressureModulatedFxParams(idx);
+}
+
+void App::applyPressureModulatedFxParams(int sceneIdx) {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES) return;
+    const int fxMi = static_cast<int>(KnobMode::FxParam);
+    const SceneState& s = scenes_[sceneIdx];
+    const float pressure = std::clamp(scenePressureNorm_[sceneIdx], 0.0f, 1.0f);
+    constexpr float kPressureDepth = 0.35f;
+
+    for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+        float p0 = s.knobs[fxMi][slot * 2];
+        float p1 = s.knobs[fxMi][slot * 2 + 1];
+        if (p0 < 0.0f) p0 = 0.5f;
+        if (p1 < 0.0f) p1 = 0.5f;
+
+        float p1Mod = std::clamp(p1 + pressure * kPressureDepth, 0.0f, 1.0f);
+        fxPatches_[slot].p[0] = p0;
+        fxPatches_[slot].p[1] = p1Mod;
+        compositor_.setFxParams(slot, p0, p1Mod);
+    }
 }
 
 // ── Update knob param name labels from active scene's FX patches ──────────────
@@ -945,6 +975,8 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         }
     }
     applyKnob(knobIdx, normValue, eff);
+    if (eff == KnobMode::FxParam)
+        applyPressureModulatedFxParams(currentScene_);
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
 
@@ -1200,6 +1232,8 @@ void App::onKnobDrag(int knobIdx, float normValue) {
     }
     knobLastPhys_[knobIdx] = normValue;
     applyKnob(knobIdx, normValue, eff);
+    if (eff == KnobMode::FxParam)
+        applyPressureModulatedFxParams(currentScene_);
     controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
 }
 

@@ -138,6 +138,8 @@ private:
     std::array<uint32_t, NUM_SRC_LAYERS> globalRotationVersion_ = {0, 0, 0};
     std::array<float, NUM_SRC_LAYERS> globalZoomNorm_ = {0.5f, 0.5f, 0.5f};  // 0.5 = 1.0x zoom
     std::array<uint32_t, NUM_SRC_LAYERS> globalZoomVersion_ = {0, 0, 0};
+    // Scene-local channel pressure value (0..1), driven by MIDI channel pressure.
+    std::array<float, NUM_SCENES> scenePressureNorm_ = {};
 
     // Pan/zoom animation state (when changing scenes)
     bool panZoomAnimating_ = false;
@@ -201,6 +203,8 @@ private:
     static float normFromLIFNeuronCount(int neuronCount);
     // Push all stored values in scenes_[idx] to the engine.
     void applySceneToEngine(int idx);
+    // Apply per-scene pressure modulation to FX params without overwriting stored knob values.
+    void applyPressureModulatedFxParams(int sceneIdx);
     // Sync all 6 knob arc widgets to the active scene's stored values.
     void refreshKnobDisplay();
     // Update knob param name labels based on active scene's FX patches.

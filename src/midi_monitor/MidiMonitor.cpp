@@ -18,7 +18,7 @@ static const char* statusName(unsigned char status) {
     switch (status & 0xF0) {
         case 0x80: return "Note Off";
         case 0x90: return "Note On";
-        case 0xA0: return "Aftertouch";
+        case 0xA0: return "Poly Pressure";
         case 0xB0: return "CC";
         case 0xC0: return "Program";
         case 0xD0: return "Ch Pressure";
@@ -208,13 +208,17 @@ std::string MidiMonitor::formatMessage(double deltaTime,
     if ((status & 0xF0) == 0xF0) {
         // System messages — no channel
         ss << statusName(status);
+        ss << "  [st=0x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
+           << static_cast<int>(status) << std::dec << std::nouppercase << std::setfill(' ') << "]";
         for (std::size_t i = 1; i < msg.size(); ++i)
             ss << "  " << static_cast<int>(msg[i]);
         return ss.str();
     }
 
     ss << "Ch" << std::setw(2) << channel << "  ";
-    ss << std::setw(11) << std::left << statusName(status) << std::right;
+     ss << std::setw(13) << std::left << statusName(status) << std::right;
+     ss << "  [st=0x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
+         << static_cast<int>(status) << std::dec << std::nouppercase << std::setfill(' ') << "]";
 
     switch (status & 0xF0) {
         case 0x80: // Note Off

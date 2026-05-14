@@ -23,13 +23,14 @@
 //   Z held → KnobMode::ImgZoom
 
 struct MidiEvent {
-    enum class Type { NoteOn, NoteOff, CC, Other };
+    enum class Type { NoteOn, NoteOff, CC, ChannelPressure, Other };
     Type     type     = Type::Other;
     int      channel  = 0;  // 1-based
     int      note     = 0;
     int      velocity = 0;
     int      cc       = 0;
     int      value    = 0;
+    int      pressure = 0;
 };
 
 class MidiRouter {
@@ -61,6 +62,9 @@ public:
 
     // Raw event callback for the MIDI monitor / debug display.
     std::function<void(const MidiEvent&)> onAnyEvent;
+
+    // Called on channel pressure (aftertouch) updates. channel is 1-based.
+    std::function<void(int channel, float normValue)> onChannelPressure;
 
     KnobMode currentMode() const { return mode_; }
 
