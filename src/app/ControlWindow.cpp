@@ -227,8 +227,8 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     midiSettingsPanel_->add(lifMidiRangeMaxUpBtn_);
 
     // ── 6 knobs: 2 rows × 3 columns ─────────────────────────────────────────────────
-    // Row 0 (knobs 0-2): y=112; row 1 (knobs 3-5): y=112+KNOB_SIZE+90
-    const int rowYBase[2] = { 286, 286 + KNOB_SIZE + 90 };
+    // Keep the grid below the expanded MIDI settings panel so panel buttons stay clickable.
+    const int rowYBase[2] = { 420, 420 + KNOB_SIZE + 90 };
 
     for (int i = 0; i < NUM_KNOBS; ++i) {
         auto& ks        = knobs_[i];
