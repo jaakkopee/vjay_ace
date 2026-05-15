@@ -76,9 +76,42 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     lifMidiStatusLabel_->getRenderer()->setTextColor(TEXT_DIM);
     gui_.add(lifMidiStatusLabel_);
 
+    lifMidiStyleBtn_ = tgui::Button::create("LIF MIDI Style: Pop");
+    lifMidiStyleBtn_->setPosition(14, 172);
+    lifMidiStyleBtn_->setSize(leftColW_ - 28, 22);
+    lifMidiStyleBtn_->onPress([this] {
+        if (onLIFMidiStyleCycle)
+            onLIFMidiStyleCycle();
+    });
+    gui_.add(lifMidiStyleBtn_);
+
+    lifToneVolLabel_ = tgui::Label::create("LIF Tone Vol: 85%");
+    lifToneVolLabel_->setPosition(14, 198);
+    lifToneVolLabel_->setTextSize(12);
+    lifToneVolLabel_->getRenderer()->setTextColor(TEXT_DIM);
+    gui_.add(lifToneVolLabel_);
+
+    lifToneVolDownBtn_ = tgui::Button::create("Vol -");
+    lifToneVolDownBtn_->setPosition(14, 218);
+    lifToneVolDownBtn_->setSize(70, 22);
+    lifToneVolDownBtn_->onPress([this] {
+        if (onLIFToneVolumeNudge)
+            onLIFToneVolumeNudge(-5.0f);
+    });
+    gui_.add(lifToneVolDownBtn_);
+
+    lifToneVolUpBtn_ = tgui::Button::create("Vol +");
+    lifToneVolUpBtn_->setPosition(90, 218);
+    lifToneVolUpBtn_->setSize(70, 22);
+    lifToneVolUpBtn_->onPress([this] {
+        if (onLIFToneVolumeNudge)
+            onLIFToneVolumeNudge(5.0f);
+    });
+    gui_.add(lifToneVolUpBtn_);
+
     // ── MIDI Settings dropdown section ──────────────────────────────────
     midiSettingsBtn_ = tgui::Button::create("MIDI Settings ▼");
-    midiSettingsBtn_->setPosition(14, 172);
+    midiSettingsBtn_->setPosition(14, 246);
     midiSettingsBtn_->setSize(leftColW_ - 28, 24);
     midiSettingsBtn_->onPress([this] {
         midiSettingsExpanded_ = !midiSettingsExpanded_;
@@ -89,8 +122,8 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     });
     gui_.add(midiSettingsBtn_);
 
-    midiSettingsPanel_ = tgui::Panel::create({static_cast<float>(leftColW_ - 28), 76.0f});
-    midiSettingsPanel_->setPosition(14, 198);
+    midiSettingsPanel_ = tgui::Panel::create({static_cast<float>(leftColW_ - 28), 128.0f});
+    midiSettingsPanel_->setPosition(14, 272);
     midiSettingsPanel_->getRenderer()->setBackgroundColor(tgui::Color(24, 24, 32));
     midiSettingsPanel_->setVisible(false);
     gui_.add(midiSettingsPanel_);
@@ -126,6 +159,72 @@ void ControlWindow::buildGui(int width, int /*height*/) {
             onMidiOutPortChanged(midiOutPortBox_->getSelectedItem().toStdString());
     });
     midiSettingsPanel_->add(midiOutPortBox_);
+
+    lifMidiKeyLabel_ = tgui::Label::create("Key: C");
+    lifMidiKeyLabel_->setPosition(6, 72);
+    lifMidiKeyLabel_->setTextSize(11);
+    lifMidiKeyLabel_->getRenderer()->setTextColor(TEXT_DIM);
+    midiSettingsPanel_->add(lifMidiKeyLabel_);
+
+    lifMidiKeyDownBtn_ = tgui::Button::create("Key -");
+    lifMidiKeyDownBtn_->setPosition(80, 68);
+    lifMidiKeyDownBtn_->setSize(56, 22);
+    lifMidiKeyDownBtn_->onPress([this] {
+        if (onLIFMidiKeyNudge)
+            onLIFMidiKeyNudge(-1);
+    });
+    midiSettingsPanel_->add(lifMidiKeyDownBtn_);
+
+    lifMidiKeyUpBtn_ = tgui::Button::create("Key +");
+    lifMidiKeyUpBtn_->setPosition(140, 68);
+    lifMidiKeyUpBtn_->setSize(56, 22);
+    lifMidiKeyUpBtn_->onPress([this] {
+        if (onLIFMidiKeyNudge)
+            onLIFMidiKeyNudge(1);
+    });
+    midiSettingsPanel_->add(lifMidiKeyUpBtn_);
+
+    lifMidiRangeLabel_ = tgui::Label::create("Range: 36-96");
+    lifMidiRangeLabel_->setPosition(6, 100);
+    lifMidiRangeLabel_->setTextSize(11);
+    lifMidiRangeLabel_->getRenderer()->setTextColor(TEXT_DIM);
+    midiSettingsPanel_->add(lifMidiRangeLabel_);
+
+    lifMidiRangeMinDownBtn_ = tgui::Button::create("Lo-");
+    lifMidiRangeMinDownBtn_->setPosition(80, 94);
+    lifMidiRangeMinDownBtn_->setSize(32, 22);
+    lifMidiRangeMinDownBtn_->onPress([this] {
+        if (onLIFMidiRangeMinNudge)
+            onLIFMidiRangeMinNudge(-1);
+    });
+    midiSettingsPanel_->add(lifMidiRangeMinDownBtn_);
+
+    lifMidiRangeMinUpBtn_ = tgui::Button::create("Lo+");
+    lifMidiRangeMinUpBtn_->setPosition(116, 94);
+    lifMidiRangeMinUpBtn_->setSize(32, 22);
+    lifMidiRangeMinUpBtn_->onPress([this] {
+        if (onLIFMidiRangeMinNudge)
+            onLIFMidiRangeMinNudge(1);
+    });
+    midiSettingsPanel_->add(lifMidiRangeMinUpBtn_);
+
+    lifMidiRangeMaxDownBtn_ = tgui::Button::create("Hi-");
+    lifMidiRangeMaxDownBtn_->setPosition(152, 94);
+    lifMidiRangeMaxDownBtn_->setSize(32, 22);
+    lifMidiRangeMaxDownBtn_->onPress([this] {
+        if (onLIFMidiRangeMaxNudge)
+            onLIFMidiRangeMaxNudge(-1);
+    });
+    midiSettingsPanel_->add(lifMidiRangeMaxDownBtn_);
+
+    lifMidiRangeMaxUpBtn_ = tgui::Button::create("Hi+");
+    lifMidiRangeMaxUpBtn_->setPosition(188, 94);
+    lifMidiRangeMaxUpBtn_->setSize(32, 22);
+    lifMidiRangeMaxUpBtn_->onPress([this] {
+        if (onLIFMidiRangeMaxNudge)
+            onLIFMidiRangeMaxNudge(1);
+    });
+    midiSettingsPanel_->add(lifMidiRangeMaxUpBtn_);
 
     // ── 6 knobs: 2 rows × 3 columns ─────────────────────────────────────────────────
     // Row 0 (knobs 0-2): y=112; row 1 (knobs 3-5): y=112+KNOB_SIZE+90
@@ -286,6 +385,15 @@ void ControlWindow::setPressureNorm(float norm) {
     }
 }
 
+void ControlWindow::setLifToneVolume(float volume) {
+    if (!lifToneVolLabel_)
+        return;
+    const float clamped = std::clamp(volume, 0.0f, 100.0f);
+    char buffer[48];
+    std::snprintf(buffer, sizeof(buffer), "LIF Tone Vol: %d%%", static_cast<int>(clamped + 0.5f));
+    lifToneVolLabel_->setText(buffer);
+}
+
 void ControlWindow::setLifMidiStatus(bool enabled, int channel, int baseNote) {
     if (!lifMidiStatusLabel_ || !lifMidiToggleBtn_) return;
     char buf[96];
@@ -294,6 +402,26 @@ void ControlWindow::setLifMidiStatus(bool enabled, int channel, int baseNote) {
     lifMidiStatusLabel_->setText(buf);
     lifMidiStatusLabel_->getRenderer()->setTextColor(enabled ? tgui::Color(80, 255, 120) : TEXT_DIM);
     lifMidiToggleBtn_->setText(enabled ? "Disable LIF MIDI (M)" : "Enable LIF MIDI (M)");
+}
+
+void ControlWindow::setLifMidiStyle(const std::string& styleName) {
+    if (!lifMidiStyleBtn_)
+        return;
+    lifMidiStyleBtn_->setText("LIF MIDI Style: " + styleName);
+}
+
+void ControlWindow::setLifMidiKey(const std::string& keyName) {
+    if (!lifMidiKeyLabel_)
+        return;
+    lifMidiKeyLabel_->setText("Key: " + keyName);
+}
+
+void ControlWindow::setLifMidiRange(int minNote, int maxNote) {
+    if (!lifMidiRangeLabel_)
+        return;
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "Range: %d-%d", minNote, maxNote);
+    lifMidiRangeLabel_->setText(buf);
 }
 
 void ControlWindow::setMidiPortLists(const std::vector<std::string>& inPorts,

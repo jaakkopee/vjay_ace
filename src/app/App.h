@@ -80,6 +80,33 @@ public:
 private:
         // LIF MIDI note state (per bin)
         std::array<bool, 16> lifMidiNoteOn_ = {};
+        std::array<std::vector<int>, 16> lifMidiActiveNotes_;
+        std::array<int, 16> lifMidiActiveChannel_ = {};
+        enum class LifMidiStyle {
+            Pop = 0,
+            Rock,
+            Jazz,
+            Blues,
+            Percussion,
+        };
+        enum class HarmonicFunction {
+            Tonic = 0,
+            Subdominant,
+            Dominant,
+        };
+        LifMidiStyle lifMidiStyle_ = LifMidiStyle::Pop;
+        int lifMidiKeySemitone_ = 0;   // 0=C, 1=C#, ... 11=B
+        int lifMidiRangeMin_ = 36;
+        int lifMidiRangeMax_ = 96;
+        void cycleLifMidiStyle();
+        const char* lifMidiStyleName() const;
+        const char* lifMidiKeyName() const;
+        void nudgeLifMidiKey(int delta);
+        void nudgeLifMidiRangeMin(int delta);
+        void nudgeLifMidiRangeMax(int delta);
+        void refreshLifMidiUi();
+        HarmonicFunction classifyLifFunction(int bin, float energy, float prevEnergy, float maxEnergy, bool feedforward) const;
+        std::vector<int> lifMidiNotesForFunction(HarmonicFunction function, int bin, int baseNote, float driveNorm) const;
     // Subsystems
     LayerManager      layers_;
     MidiRouter        midi_;
@@ -182,14 +209,18 @@ private:
     sf::Texture          compositeTex_;
     float                lifToneScanPhase_ = 0.0f;
     bool                 lifToneEnabled_ = true;
+    float                lifToneVolume_ = 85.0f;
     bool                 lifMidiEnabled_ = false;
     bool                 lifMidiNoSceneWarned_ = false;
+    std::array<int, 16>  lifMidiGateFrames_ = {};
+    std::array<int, 16>  lifMidiCooldownFrames_ = {};
         // MIDI output toggle for LIF networks
         void toggleLifMidi();
     float                lifToneScanTempo_ = 0.22f;
     float                lifToneMinFreqHz_ = 80.0f;
     float                lifToneMaxFreqHz_ = 1600.0f;
     bool sceneUsesLIF(int sceneIdx) const;
+    void resetLifMidiState();
 
     // ── Wiring ───────────────────────────────────────────────────────────
     void wireCallbacks();

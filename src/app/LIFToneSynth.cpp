@@ -23,7 +23,7 @@ LIFToneSynth::LIFToneSynth() {
 
 bool LIFToneSynth::startStream() {
     initialize(2, SAMPLE_RATE, {sf::SoundChannel::FrontLeft, sf::SoundChannel::FrontRight});
-    setVolume(85.0f);
+    setVolume(outputVolume_);
     play();
     return true;
 }
@@ -46,6 +46,11 @@ void LIFToneSynth::setFrequencyRange(float minHz, float maxHz) {
         const float t = (NUM_BINS > 1) ? static_cast<float>(i) / static_cast<float>(NUM_BINS - 1) : 0.0f;
         freqHz_[i] = minFreqHz_ * std::pow(maxFreqHz_ / minFreqHz_, t);
     }
+}
+
+void LIFToneSynth::setOutputVolume(float volume) {
+    outputVolume_ = std::clamp(volume, 0.0f, 100.0f);
+    setVolume(outputVolume_);
 }
 
 void LIFToneSynth::setColumnEnergies(const std::array<float, NUM_BINS>& energies) {

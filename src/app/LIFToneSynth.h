@@ -19,6 +19,7 @@ public:
     void stopStream();
     void setBypass(bool bypass);
     void setFrequencyRange(float minHz, float maxHz);
+    void setOutputVolume(float volume);
 
     // Input energies are expected in [0..1]. Bin index maps low->high frequency.
     void setColumnEnergies(const std::array<float, NUM_BINS>& energies);
@@ -33,6 +34,7 @@ private:
     std::array<float, NUM_BINS> freqHz_{};
     float minFreqHz_ = 80.0f;
     float maxFreqHz_ = 1600.0f;
+    float outputVolume_ = 85.0f;
     std::atomic<bool> bypassed_{false};
 
     std::mutex ampMutex_;

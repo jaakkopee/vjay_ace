@@ -128,6 +128,189 @@ bool App::sceneUsesLIF(int sceneIdx) const {
     return false;
 }
 
+void App::resetLifMidiState() {
+    const int fallbackChannel = (lifMidiStyle_ == LifMidiStyle::Percussion) ? 10 : 1;
+    for (int bin = 0; bin < 16; ++bin) {
+        if (lifMidiNoteOn_[bin]) {
+            const int channel = (lifMidiActiveChannel_[bin] > 0) ? lifMidiActiveChannel_[bin] : fallbackChannel;
+            for (int note : lifMidiActiveNotes_[bin])
+                midi_.sendNoteOff(channel, note);
+            lifMidiNoteOn_[bin] = false;
+        }
+        lifMidiActiveNotes_[bin].clear();
+        lifMidiActiveChannel_[bin] = 0;
+        lifMidiGateFrames_[bin] = 0;
+        lifMidiCooldownFrames_[bin] = 0;
+    }
+}
+
+const char* App::lifMidiStyleName() const {
+    switch (lifMidiStyle_) {
+        case LifMidiStyle::Pop:        return "Pop";
+        case LifMidiStyle::Rock:       return "Rock";
+        case LifMidiStyle::Jazz:       return "Jazz";
+        case LifMidiStyle::Blues:      return "Blues";
+        case LifMidiStyle::Percussion: return "Percussion";
+        default:                       return "Pop";
+    }
+}
+
+const char* App::lifMidiKeyName() const {
+    static constexpr const char* kNames[12] = {
+        "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
+    };
+    return kNames[std::clamp(lifMidiKeySemitone_, 0, 11)];
+}
+
+void App::refreshLifMidiUi() {
+    controlWin_.setLifMidiStyle(lifMidiStyleName());
+    controlWin_.setLifMidiKey(lifMidiKeyName());
+    controlWin_.setLifMidiRange(lifMidiRangeMin_, lifMidiRangeMax_);
+    controlWin_.setLifMidiStatus(lifMidiEnabled_,
+                                 (lifMidiStyle_ == LifMidiStyle::Percussion) ? 10 : 1,
+                                 lifMidiRangeMin_);
+}
+
+void App::nudgeLifMidiKey(int delta) {
+    if (delta == 0) return;
+    resetLifMidiState();
+    lifMidiKeySemitone_ = (lifMidiKeySemitone_ + delta) % 12;
+    if (lifMidiKeySemitone_ < 0)
+        lifMidiKeySemitone_ += 12;
+    refreshLifMidiUi();
+    std::cout << "[LIF MIDI] key=" << lifMidiKeyName() << std::endl;
+}
+
+void App::nudgeLifMidiRangeMin(int delta) {
+    if (delta == 0) return;
+    resetLifMidiState();
+    lifMidiRangeMin_ = std::clamp(lifMidiRangeMin_ + delta, 0, lifMidiRangeMax_ - 1);
+    refreshLifMidiUi();
+    std::cout << "[LIF MIDI] range=" << lifMidiRangeMin_ << "-" << lifMidiRangeMax_ << std::endl;
+}
+
+void App::nudgeLifMidiRangeMax(int delta) {
+    if (delta == 0) return;
+    resetLifMidiState();
+    lifMidiRangeMax_ = std::clamp(lifMidiRangeMax_ + delta, lifMidiRangeMin_ + 1, 127);
+    refreshLifMidiUi();
+    std::cout << "[LIF MIDI] range=" << lifMidiRangeMin_ << "-" << lifMidiRangeMax_ << std::endl;
+}
+
+void App::cycleLifMidiStyle() {
+    resetLifMidiState();
+    switch (lifMidiStyle_) {
+        case LifMidiStyle::Pop:        lifMidiStyle_ = LifMidiStyle::Rock; break;
+        case LifMidiStyle::Rock:       lifMidiStyle_ = LifMidiStyle::Jazz; break;
+        case LifMidiStyle::Jazz:       lifMidiStyle_ = LifMidiStyle::Blues; break;
+        case LifMidiStyle::Blues:      lifMidiStyle_ = LifMidiStyle::Percussion; break;
+        case LifMidiStyle::Percussion: lifMidiStyle_ = LifMidiStyle::Pop; break;
+    }
+    refreshLifMidiUi();
+    std::cout << "[LIF MIDI] style=" << lifMidiStyleName() << std::endl;
+}
+
+App::HarmonicFunction App::classifyLifFunction(int bin,
+                                               float energy,
+                                               float prevEnergy,
+                                               float maxEnergy,
+                                               bool feedforward) const {
+    const float rel = (maxEnergy > 0.001f) ? std::clamp(energy / maxEnergy, 0.0f, 1.0f) : 0.0f;
+    const float contour = energy - prevEnergy;
+
+    // De la Motte style reading: every harmony is heard as T, S, or D function.
+    if (bin >= 11 || rel > 0.82f || contour > 0.08f)
+        return HarmonicFunction::Dominant;
+    if (bin >= 6 || rel > 0.45f || (feedforward && contour > 0.02f))
+        return HarmonicFunction::Subdominant;
+    return HarmonicFunction::Tonic;
+}
+
+std::vector<int> App::lifMidiNotesForFunction(HarmonicFunction function,
+                                              int bin,
+                                              int baseNote,
+                                              float driveNorm) const {
+    const auto clampNote = [](int n) { return std::clamp(n, 0, 127); };
+    const auto fitToRange = [this](int note) {
+        int n = std::clamp(note, 0, 127);
+        const int lo = std::clamp(lifMidiRangeMin_, 0, 126);
+        const int hi = std::clamp(lifMidiRangeMax_, lo + 1, 127);
+        while (n < lo) n += 12;
+        while (n > hi) n -= 12;
+        if (n < lo) n = lo;
+        if (n > hi) n = hi;
+        return n;
+    };
+    const int octave = (bin / 4) - 1; // spreads bins over four octaves around base
+    const int variant = bin % 4;
+
+    if (lifMidiStyle_ == LifMidiStyle::Percussion) {
+        static constexpr std::array<int, 16> drumMap = {36, 38, 42, 46, 49, 51, 45, 41, 43, 44, 47, 50, 57, 59, 60, 62};
+        return {drumMap[static_cast<std::size_t>(bin % 16)]};
+    }
+
+    int degree = 0;
+    switch (function) {
+        case HarmonicFunction::Tonic: {
+            static constexpr std::array<int, 4> tonicDegrees = {0, 9, 4, 0};   // I, vi, iii, I
+            degree = tonicDegrees[static_cast<std::size_t>(variant)];
+            break;
+        }
+        case HarmonicFunction::Subdominant: {
+            static constexpr std::array<int, 4> subDegrees = {2, 5, 2, 5};     // ii / IV family
+            degree = subDegrees[static_cast<std::size_t>(variant)];
+            break;
+        }
+        case HarmonicFunction::Dominant: {
+            static constexpr std::array<int, 4> domDegrees = {7, 11, 7, 10};    // V / vii / V / bVII
+            degree = domDegrees[static_cast<std::size_t>(variant)];
+            break;
+        }
+    }
+
+    const int root = clampNote(baseNote + degree + octave * 12);
+    std::vector<int> chord;
+
+    switch (lifMidiStyle_) {
+        case LifMidiStyle::Pop:
+            if (function == HarmonicFunction::Tonic) chord = {root, root + 4, root + 7, root + 14};
+            else if (function == HarmonicFunction::Subdominant) chord = {root, root + 5, root + 7, root + 14};
+            else chord = {root, root + 4, root + 7, root + 10};
+            break;
+        case LifMidiStyle::Rock:
+            if (function == HarmonicFunction::Tonic) chord = {root, root + 7, root + 12};
+            else if (function == HarmonicFunction::Subdominant) chord = {root, root + 5, root + 7, root + 12};
+            else chord = {root, root + 7, root + 10, root + 14};
+            break;
+        case LifMidiStyle::Jazz:
+            if (function == HarmonicFunction::Tonic) chord = {root, root + 4, root + 7, root + 11, root + 14};
+            else if (function == HarmonicFunction::Subdominant) chord = {root, root + 3, root + 7, root + 10, root + 14};
+            else chord = {root, root + 4, root + 7, root + 10, root + 13};
+            break;
+        case LifMidiStyle::Blues:
+            if (function == HarmonicFunction::Dominant) chord = {root, root + 4, root + 7, root + 10, root + 15};
+            else chord = {root, root + 4, root + 7, root + 10};
+            break;
+        case LifMidiStyle::Percussion:
+            chord = {root};
+            break;
+    }
+
+    // Thin voicings at low drive, fuller voicings when activity is strong.
+    const float drive = std::clamp(driveNorm, 0.0f, 1.0f);
+    if (drive < 0.40f && chord.size() > 3) chord.resize(3);
+    else if (drive < 0.65f && chord.size() > 4) chord.resize(4);
+
+    std::vector<int> deduped;
+    deduped.reserve(chord.size());
+    for (int note : chord) {
+        const int clamped = fitToRange(clampNote(note));
+        if (std::find(deduped.begin(), deduped.end(), clamped) == deduped.end())
+            deduped.push_back(clamped);
+    }
+    return deduped;
+}
+
 bool App::init() {
     // ── Register signal handlers so Ctrl-C saves state before exit ───────
     g_sigApp = this;
@@ -245,6 +428,7 @@ bool App::init() {
     if (!lifToneSynth_.startStream())
         std::cerr << "[App] LIF tone synth init failed\n";
     lifToneSynth_.setFrequencyRange(lifToneMinFreqHz_, lifToneMaxFreqHz_);
+    lifToneSynth_.setOutputVolume(lifToneVolume_);
 
     // ── Knob pickup state ────────────────────────────────────────────────
     knobLastPhys_.fill(0.5f);
@@ -267,6 +451,8 @@ bool App::init() {
     for (int i = 0; i < NUM_KNOBS; ++i)
         controlWin_.setKnobParamName(i, defaultNames[i]);
     controlWin_.setKnobMode(knobMode_);
+    refreshLifMidiUi();
+    controlWin_.setLifToneVolume(lifToneVolume_);
     refreshKnobDisplay();
     if (currentScene_ >= 0) refreshKnobParamNames();
     if (currentScene_ >= 0) {
@@ -284,9 +470,10 @@ void App::toggleLifMidi() {
     lifMidiEnabled_ = !lifMidiEnabled_;
     std::cout << "[LIF MIDI] " << (lifMidiEnabled_ ? "enabled" : "disabled") << std::endl;
     if (!lifMidiEnabled_) {
+        resetLifMidiState();
         lifMidiNoSceneWarned_ = false;
     }
-    controlWin_.setLifMidiStatus(lifMidiEnabled_, 1, 60);
+    refreshLifMidiUi();
 }
 
 // ── Callbacks ─────────────────────────────────────────────────────────────────
@@ -504,6 +691,12 @@ void App::wireCallbacks() {
             lifToneSynth_.setColumnEnergies({});
         std::cout << "[LIF Tone] " << (lifToneEnabled_ ? "enabled" : "disabled") << std::endl;
     };
+    controlWin_.onLIFToneVolumeNudge = [this](float delta) {
+        lifToneVolume_ = std::clamp(lifToneVolume_ + delta, 0.0f, 100.0f);
+        lifToneSynth_.setOutputVolume(lifToneVolume_);
+        controlWin_.setLifToneVolume(lifToneVolume_);
+        std::cout << "[LIF Tone] volume=" << lifToneVolume_ << "%" << std::endl;
+    };
     controlWin_.onLIFToneTempoNudge = [this](float delta) {
         lifToneScanTempo_ = std::clamp(lifToneScanTempo_ + delta, 0.01f, 4.0f);
         std::cout << "[LIF Tone] tempo=" << lifToneScanTempo_ << " cycles/s" << std::endl;
@@ -524,6 +717,10 @@ void App::wireCallbacks() {
 
     // Keyboard shortcut: M key toggles LIF MIDI output
     controlWin_.onLIFMidiToggle = [this]() { toggleLifMidi(); };
+    controlWin_.onLIFMidiStyleCycle = [this]() { cycleLifMidiStyle(); };
+    controlWin_.onLIFMidiKeyNudge = [this](int delta) { nudgeLifMidiKey(delta); };
+    controlWin_.onLIFMidiRangeMinNudge = [this](int delta) { nudgeLifMidiRangeMin(delta); };
+    controlWin_.onLIFMidiRangeMaxNudge = [this](int delta) { nudgeLifMidiRangeMax(delta); };
 }
 
 // ── Engine helper: apply one knob value to the right engine target ────────────
@@ -1316,6 +1513,10 @@ void App::onSceneSelect(int sceneIdx) {
     refreshKnobParamNames();
     // Persist the new currentScene_ immediately so a crash won't revert it.
     saveState();
+
+    // Reset MIDI state so a scene change starts a fresh note stream.
+    if (lifMidiEnabled_)
+        resetLifMidiState();
 }
 
 // ── GUI knob drag ─────────────────────────────────────────────────────────────
@@ -1716,8 +1917,10 @@ void App::processFrame() {
         // ── LIF-to-MIDI output ──
         if (lifMidiEnabled_ && lifSceneActive) {
             lifMidiNoSceneWarned_ = false;
-            constexpr int midiChannel = 1; // 1-based
-            constexpr int baseNote = 60;   // C4
+            const int midiChannel = (lifMidiStyle_ == LifMidiStyle::Percussion) ? 10 : 1; // 1-based
+            const int baseNote = 60 + lifMidiKeySemitone_;
+            const bool feedforward = (currentScene_ >= 0 && scenes_[currentScene_].lifTopologyIndex == 2);
+
             float maxEnergy = 0.0f;
             for (float v : lifBins) maxEnergy = std::max(maxEnergy, v);
 
@@ -1726,58 +1929,74 @@ void App::processFrame() {
             const float noteOnThreshold = std::max(0.18f, maxEnergy * 0.55f);
             const float noteOffThreshold = std::max(0.12f, maxEnergy * 0.40f);
 
-            int strongestBin = 0;
-            float strongestVal = lifBins[0];
-            for (int bin = 1; bin < 16; ++bin) {
-                if (lifBins[bin] > strongestVal) {
-                    strongestVal = lifBins[bin];
-                    strongestBin = bin;
-                }
-            }
-
-            bool anyActiveCandidate = false;
             for (int bin = 0; bin < 16; ++bin) {
-                const bool candidate = lifMidiNoteOn_[bin]
-                    ? (lifBins[bin] > noteOffThreshold)
-                    : (lifBins[bin] > noteOnThreshold);
-                if (candidate) {
-                    anyActiveCandidate = true;
-                    break;
-                }
-            }
+                const float energy = lifBins[bin];
+                const float prevEnergy = (bin > 0) ? lifBins[bin - 1] : energy;
+                const float drive = std::clamp(0.75f * energy + 0.25f * prevEnergy, 0.0f, 1.0f);
+                const HarmonicFunction function = classifyLifFunction(bin, energy, prevEnergy, maxEnergy, feedforward);
 
-            for (int bin = 0; bin < 16; ++bin) {
-                bool active = lifMidiNoteOn_[bin]
-                    ? (lifBins[bin] > noteOffThreshold)
-                    : (lifBins[bin] > noteOnThreshold);
+                auto sendNotesOff = [&]() {
+                    const int offChannel = (lifMidiActiveChannel_[bin] > 0) ? lifMidiActiveChannel_[bin] : midiChannel;
+                    for (int note : lifMidiActiveNotes_[bin])
+                        midi_.sendNoteOff(offChannel, note);
+                    lifMidiActiveNotes_[bin].clear();
+                    lifMidiActiveChannel_[bin] = 0;
+                };
 
-                // Fail-safe: if thresholds produce no active bins but network has
-                // non-trivial energy, keep the strongest bin alive.
-                if (!anyActiveCandidate && maxEnergy > 0.03f && bin == strongestBin)
-                    active = true;
+                auto sendNotesOn = [&](int velocity) {
+                    const auto notes = lifMidiNotesForFunction(function, bin, baseNote, drive);
+                    for (int note : notes)
+                        midi_.sendNoteOn(midiChannel, note, velocity);
+                    lifMidiActiveNotes_[bin] = notes;
+                    lifMidiActiveChannel_[bin] = midiChannel;
+                };
 
-                if (active && !lifMidiNoteOn_[bin]) {
-                    const float rel = lifBins[bin] / std::max(maxEnergy, 0.001f);
-                    const float curved = std::pow(std::clamp(rel, 0.0f, 1.0f), 0.65f);
-                    const int velocity = std::clamp(static_cast<int>(20.0f + curved * 107.0f), 20, 127);
-                    midi_.sendNoteOn(midiChannel, baseNote + bin, velocity);
-                    lifMidiNoteOn_[bin] = true;
-                } else if (!active && lifMidiNoteOn_[bin]) {
-                    midi_.sendNoteOff(midiChannel, baseNote + bin);
-                    lifMidiNoteOn_[bin] = false;
+                if (feedforward) {
+                    if (lifMidiGateFrames_[bin] > 0) {
+                        --lifMidiGateFrames_[bin];
+                        if (lifMidiGateFrames_[bin] == 0 && lifMidiNoteOn_[bin]) {
+                            sendNotesOff();
+                            lifMidiNoteOn_[bin] = false;
+                        }
+                    }
+
+                    if (lifMidiCooldownFrames_[bin] > 0)
+                        --lifMidiCooldownFrames_[bin];
+
+                    const float prevDrive = std::clamp(prevEnergy, 0.0f, 1.0f);
+                    const bool shouldFire = (lifMidiCooldownFrames_[bin] == 0) && (drive > 0.12f);
+
+                    if (shouldFire) {
+                        const float velCurve = std::pow(drive, 0.7f);
+                        const int velocity = std::clamp(static_cast<int>(30.0f + velCurve * 97.0f + prevDrive * 10.0f), 30, 127);
+                        sendNotesOn(velocity);
+                        lifMidiNoteOn_[bin] = true;
+                        lifMidiGateFrames_[bin] = 2;
+                        const int intervalFrames = std::clamp(static_cast<int>(14.0f - prevDrive * 10.0f - energy * 4.0f), 2, 14);
+                        lifMidiCooldownFrames_[bin] = intervalFrames;
+                    }
+                } else {
+                    bool active = lifMidiNoteOn_[bin]
+                        ? (energy > noteOffThreshold)
+                        : (energy > noteOnThreshold);
+
+                    if (active && !lifMidiNoteOn_[bin]) {
+                        const float rel = energy / std::max(maxEnergy, 0.001f);
+                        const float curved = std::pow(std::clamp(rel, 0.0f, 1.0f), 0.65f);
+                        const int velocity = std::clamp(static_cast<int>(20.0f + curved * 107.0f), 20, 127);
+                        sendNotesOn(velocity);
+                        lifMidiNoteOn_[bin] = true;
+                    } else if (!active && lifMidiNoteOn_[bin]) {
+                        sendNotesOff();
+                        lifMidiNoteOn_[bin] = false;
+                    }
                 }
             }
         } else if (lifMidiEnabled_ && !lifSceneActive && !lifMidiNoSceneWarned_) {
             std::cout << "[LIF MIDI] enabled but current scene has no LIF patch; select a LIF scene to get MIDI notes." << std::endl;
             lifMidiNoSceneWarned_ = true;
         } else {
-            // All notes off if disabled
-            for (int bin = 0; bin < 16; ++bin) {
-                if (lifMidiNoteOn_[bin]) {
-                    midi_.sendNoteOff(1, 60 + bin);
-                    lifMidiNoteOn_[bin] = false;
-                }
-            }
+            resetLifMidiState();
         }
 
         perfWin_.present(compositePixels_);
@@ -1785,13 +2004,7 @@ void App::processFrame() {
     } else {
         lifToneSynth_.setColumnEnergies({});
         perfWin_.clearBlack();
-        // All notes off if frame fails
-        for (int bin = 0; bin < 16; ++bin) {
-            if (lifMidiNoteOn_[bin]) {
-                midi_.sendNoteOff(1, 60 + bin);
-                lifMidiNoteOn_[bin] = false;
-            }
-        }
+        resetLifMidiState();
     }
 }
 

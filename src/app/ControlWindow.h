@@ -67,6 +67,13 @@ public:
     // Update LIF MIDI status label and button.
     void setLifMidiStatus(bool enabled, int channel, int baseNote);
 
+    // Update the LIF MIDI voicing style label.
+    void setLifMidiStyle(const std::string& styleName);
+
+    // Update LIF MIDI key and note range labels.
+    void setLifMidiKey(const std::string& keyName);
+    void setLifMidiRange(int minNote, int maxNote);
+
     // Update MIDI port lists and active selection indexes.
     void setMidiPortLists(const std::vector<std::string>& inPorts,
                           int inIdx,
@@ -123,9 +130,14 @@ public:
     std::function<void(float delta)> onLIFToneTempoNudge;
     std::function<void(float deltaHz)> onLIFToneMinFreqNudge;
     std::function<void(float deltaHz)> onLIFToneMaxFreqNudge;
+    std::function<void(float delta)> onLIFToneVolumeNudge;
 
     // LIF MIDI controls.
     std::function<void()> onLIFMidiToggle;
+    std::function<void()> onLIFMidiStyleCycle;
+    std::function<void(int delta)> onLIFMidiKeyNudge;
+    std::function<void(int delta)> onLIFMidiRangeMinNudge;
+    std::function<void(int delta)> onLIFMidiRangeMaxNudge;
 
     // Runtime MIDI port selection callbacks (selected port name).
     std::function<void(const std::string&)> onMidiInPortChanged;
@@ -137,6 +149,8 @@ public:
     // Update channel pressure meter (0-1).
     void setPressureNorm(float norm);
 
+    // Update the LIF tone volume label.
+    void setLifToneVolume(float volume);
 private:
     sf::RenderWindow window_;
     tgui::Gui        gui_;
@@ -204,6 +218,18 @@ private:
     tgui::CanvasSFML::Ptr pressureMeterCanvas_;
     tgui::Button::Ptr lifMidiToggleBtn_;
     tgui::Label::Ptr lifMidiStatusLabel_;
+    tgui::Button::Ptr lifMidiStyleBtn_;
+    tgui::Label::Ptr lifMidiKeyLabel_;
+    tgui::Button::Ptr lifMidiKeyDownBtn_;
+    tgui::Button::Ptr lifMidiKeyUpBtn_;
+    tgui::Label::Ptr lifMidiRangeLabel_;
+    tgui::Button::Ptr lifMidiRangeMinDownBtn_;
+    tgui::Button::Ptr lifMidiRangeMinUpBtn_;
+    tgui::Button::Ptr lifMidiRangeMaxDownBtn_;
+    tgui::Button::Ptr lifMidiRangeMaxUpBtn_;
+    tgui::Label::Ptr lifToneVolLabel_;
+    tgui::Button::Ptr lifToneVolDownBtn_;
+    tgui::Button::Ptr lifToneVolUpBtn_;
     tgui::Button::Ptr midiSettingsBtn_;
     tgui::Panel::Ptr midiSettingsPanel_;
     tgui::ComboBox::Ptr midiInPortBox_;
