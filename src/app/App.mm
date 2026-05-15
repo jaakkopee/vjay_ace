@@ -164,11 +164,25 @@ const char* App::lifMidiKeyName() const {
 
 void App::refreshLifMidiUi() {
     controlWin_.setLifMidiStyle(lifMidiStyleName());
+    controlWin_.setLifMidiMode(lifMidiModalScaleName());
     controlWin_.setLifMidiKey(lifMidiKeyName());
     controlWin_.setLifMidiRange(lifMidiRangeMin_, lifMidiRangeMax_);
     controlWin_.setLifMidiStatus(lifMidiEnabled_,
                                  (lifMidiStyle_ == LifMidiStyle::Percussion) ? 10 : 1,
                                  lifMidiRangeMin_);
+}
+
+const char* App::lifMidiModalScaleName() const {
+    switch (lifMidiModalScale_) {
+        case ModalScale::Ionian:     return "Ionian";
+        case ModalScale::Dorian:     return "Dorian";
+        case ModalScale::Phrygian:   return "Phrygian";
+        case ModalScale::Lydian:     return "Lydian";
+        case ModalScale::Mixolydian: return "Mixolydian";
+        case ModalScale::Aeolian:    return "Aeolian";
+        case ModalScale::Locrian:    return "Locrian";
+        default:                     return "Dorian";
+    }
 }
 
 void App::nudgeLifMidiKey(int delta) {
@@ -210,6 +224,21 @@ void App::cycleLifMidiStyle() {
     }
     refreshLifMidiUi();
     std::cout << "[LIF MIDI] style=" << lifMidiStyleName() << std::endl;
+}
+
+void App::cycleLifMidiModalScale() {
+    resetLifMidiState();
+    switch (lifMidiModalScale_) {
+        case ModalScale::Ionian:     lifMidiModalScale_ = ModalScale::Dorian; break;
+        case ModalScale::Dorian:     lifMidiModalScale_ = ModalScale::Phrygian; break;
+        case ModalScale::Phrygian:   lifMidiModalScale_ = ModalScale::Lydian; break;
+        case ModalScale::Lydian:     lifMidiModalScale_ = ModalScale::Mixolydian; break;
+        case ModalScale::Mixolydian: lifMidiModalScale_ = ModalScale::Aeolian; break;
+        case ModalScale::Aeolian:    lifMidiModalScale_ = ModalScale::Locrian; break;
+        case ModalScale::Locrian:    lifMidiModalScale_ = ModalScale::Ionian; break;
+    }
+    refreshLifMidiUi();
+    std::cout << "[LIF MIDI] modal scale=" << lifMidiModalScaleName() << std::endl;
 }
 
 App::HarmonicFunction App::classifyLifFunction(int bin,
@@ -254,44 +283,72 @@ std::vector<int> App::lifMidiNotesForFunction(HarmonicFunction function,
     int degree = 0;
     switch (function) {
         case HarmonicFunction::Tonic: {
-            static constexpr std::array<int, 4> tonicDegrees = {0, 9, 4, 0};   // I, vi, iii, I
+            static constexpr std::array<int, 4> tonicDegrees = {0, 5, 2, 0};   // I, vi, iii, I (scale degrees)
             degree = tonicDegrees[static_cast<std::size_t>(variant)];
             break;
         }
         case HarmonicFunction::Subdominant: {
-            static constexpr std::array<int, 4> subDegrees = {2, 5, 2, 5};     // ii / IV family
+            static constexpr std::array<int, 4> subDegrees = {1, 3, 1, 3};     // ii / IV family
             degree = subDegrees[static_cast<std::size_t>(variant)];
             break;
         }
         case HarmonicFunction::Dominant: {
-            static constexpr std::array<int, 4> domDegrees = {7, 11, 7, 10};    // V / vii / V / bVII
+            static constexpr std::array<int, 4> domDegrees = {4, 6, 4, 6};      // V / vii family
             degree = domDegrees[static_cast<std::size_t>(variant)];
             break;
         }
     }
 
-    const int root = clampNote(baseNote + degree + octave * 12);
+    const std::array<int, 7> intervals = [&]() {
+        switch (lifMidiModalScale_) {
+            case ModalScale::Ionian:     return std::array<int, 7>{0, 2, 4, 5, 7, 9, 11};
+            case ModalScale::Dorian:     return std::array<int, 7>{0, 2, 3, 5, 7, 9, 10};
+            case ModalScale::Phrygian:   return std::array<int, 7>{0, 1, 3, 5, 7, 8, 10};
+            case ModalScale::Lydian:     return std::array<int, 7>{0, 2, 4, 6, 7, 9, 11};
+            case ModalScale::Mixolydian: return std::array<int, 7>{0, 2, 4, 5, 7, 9, 10};
+            case ModalScale::Aeolian:    return std::array<int, 7>{0, 2, 3, 5, 7, 8, 10};
+            case ModalScale::Locrian:    return std::array<int, 7>{0, 1, 3, 5, 6, 8, 10};
+            default:                     return std::array<int, 7>{0, 2, 3, 5, 7, 9, 10};
+        }
+    }();
+    auto noteFromDegree = [&](int rootDegree, int thirdStackOffset) {
+        const int totalDegree = rootDegree + thirdStackOffset;
+        const int scaleDegree = ((totalDegree % 7) + 7) % 7;
+        const int degreeOctave = totalDegree / 7;
+        return clampNote(baseNote + octave * 12 + intervals[scaleDegree] + degreeOctave * 12);
+    };
+
+    const int root = noteFromDegree(degree, 0);
     std::vector<int> chord;
 
     switch (lifMidiStyle_) {
         case LifMidiStyle::Pop:
-            if (function == HarmonicFunction::Tonic) chord = {root, root + 4, root + 7, root + 14};
-            else if (function == HarmonicFunction::Subdominant) chord = {root, root + 5, root + 7, root + 14};
-            else chord = {root, root + 4, root + 7, root + 10};
+            chord = {noteFromDegree(degree, 0), noteFromDegree(degree, 2), noteFromDegree(degree, 4)};
+            if (function == HarmonicFunction::Dominant) chord.push_back(noteFromDegree(degree, 6));
+            else chord.push_back(noteFromDegree(degree, 8));
             break;
         case LifMidiStyle::Rock:
-            if (function == HarmonicFunction::Tonic) chord = {root, root + 7, root + 12};
-            else if (function == HarmonicFunction::Subdominant) chord = {root, root + 5, root + 7, root + 12};
-            else chord = {root, root + 7, root + 10, root + 14};
+            chord = {noteFromDegree(degree, 0), noteFromDegree(degree, 4), noteFromDegree(degree, 7)};
+            if (function == HarmonicFunction::Dominant) chord.push_back(noteFromDegree(degree, 6));
             break;
         case LifMidiStyle::Jazz:
-            if (function == HarmonicFunction::Tonic) chord = {root, root + 4, root + 7, root + 11, root + 14};
-            else if (function == HarmonicFunction::Subdominant) chord = {root, root + 3, root + 7, root + 10, root + 14};
-            else chord = {root, root + 4, root + 7, root + 10, root + 13};
+            chord = {
+                noteFromDegree(degree, 0),
+                noteFromDegree(degree, 2),
+                noteFromDegree(degree, 4),
+                noteFromDegree(degree, 6),
+                noteFromDegree(degree, 8)
+            };
             break;
         case LifMidiStyle::Blues:
-            if (function == HarmonicFunction::Dominant) chord = {root, root + 4, root + 7, root + 10, root + 15};
-            else chord = {root, root + 4, root + 7, root + 10};
+            chord = {
+                noteFromDegree(degree, 0),
+                noteFromDegree(degree, 2),
+                noteFromDegree(degree, 4),
+                noteFromDegree(degree, 6)
+            };
+            if (function == HarmonicFunction::Dominant)
+                chord.push_back(clampNote(root + 6)); // blues b5 color tone
             break;
         case LifMidiStyle::Percussion:
             chord = {root};
@@ -720,6 +777,7 @@ void App::wireCallbacks() {
     // Keyboard shortcut: M key toggles LIF MIDI output
     controlWin_.onLIFMidiToggle = [this]() { toggleLifMidi(); };
     controlWin_.onLIFMidiStyleCycle = [this]() { cycleLifMidiStyle(); };
+    controlWin_.onLIFMidiModeCycle = [this]() { cycleLifMidiModalScale(); };
     controlWin_.onLIFMidiKeyNudge = [this](int delta) { nudgeLifMidiKey(delta); };
     controlWin_.onLIFMidiRangeMinNudge = [this](int delta) { nudgeLifMidiRangeMin(delta); };
     controlWin_.onLIFMidiRangeMaxNudge = [this](int delta) { nudgeLifMidiRangeMax(delta); };
@@ -1676,7 +1734,7 @@ void App::saveState() const {
         if (!f) { std::cerr << "[App] Could not open temp state file for writing\n"; return; }
         // Write magic + version for future-proofing
         const uint32_t magic = 0x56414345; // 'VACE'
-        const uint32_t ver   = 12;
+        const uint32_t ver   = 13;
         f.write(reinterpret_cast<const char*>(&magic), 4);
         f.write(reinterpret_cast<const char*>(&ver),   4);
         // Write all scene states (knobs + image paths)
@@ -1705,6 +1763,8 @@ void App::saveState() const {
                 f.write(reinterpret_cast<const char*>(&a), sizeof(float));
         }
         f.write(reinterpret_cast<const char*>(&currentScene_), sizeof(int));
+        const int modalScale = static_cast<int>(lifMidiModalScale_);
+        f.write(reinterpret_cast<const char*>(&modalScale), sizeof(int));
         if (!f) { std::cerr << "[App] State write error — temp file may be incomplete\n"; return; }
     } // ofstream closes + flushes here
     if (std::rename(tmp.c_str(), statePath().c_str()) != 0) {
@@ -1732,6 +1792,7 @@ void App::loadState() {
     // v10: 32 scenes (added second 16-note scene bank, starts at E3)
     // v11: per-scene pressure mapping settings (21 targets)
     // v12: pressure mapping includes opacity targets (24 targets)
+    // v13: persists LIF MIDI modal scale selection
     const bool isV3 = (ver == 3);
     const bool isV4 = (ver == 4);
     const bool isV5 = (ver == 5);
@@ -1742,12 +1803,13 @@ void App::loadState() {
     const bool isV10 = (ver == 10);
     const bool isV11 = (ver == 11);
     const bool isV12 = (ver == 12);
-    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7 && !isV8 && !isV9 && !isV10 && !isV11 && !isV12) {
+    const bool isV13 = (ver == 13);
+    if (!isV3 && !isV4 && !isV5 && !isV6 && !isV7 && !isV8 && !isV9 && !isV10 && !isV11 && !isV12 && !isV13) {
         std::cerr << "[App] Ignoring incompatible state file\n";
         return;
     }
     // Older saves have 14 or 16 scenes. v10+ saves all NUM_SCENES.
-    const int savedSceneCount = (isV10 || isV11 || isV12) ? NUM_SCENES : (isV6 || isV7 || isV8 || isV9) ? 16 : 14;
+    const int savedSceneCount = (isV10 || isV11 || isV12 || isV13) ? NUM_SCENES : (isV6 || isV7 || isV8 || isV9) ? 16 : 14;
     for (int si = 0; si < savedSceneCount && si < NUM_SCENES; ++si) {
         auto& s = scenes_[si];
         // v3=3 modes, v4=4, v5/v6=5, v7=6
@@ -1755,13 +1817,13 @@ void App::loadState() {
         for (int mi = 0; mi < savedModes; ++mi)
             for (float& v : s.knobs[mi])
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
-        if (isV8 || isV9 || isV10 || isV11 || isV12) {
+        if (isV8 || isV9 || isV10 || isV11 || isV12 || isV13) {
             for (float& v : s.imageCrossfadeSpeedNorm)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
             for (float& v : s.sceneCrossfadeSpeedNorm)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
         }
-        if (isV9 || isV10 || isV11 || isV12) {
+        if (isV9 || isV10 || isV11 || isV12 || isV13) {
             if (!f.read(reinterpret_cast<char*>(&s.lifTopologyIndex), sizeof(int))) return;
             if (!f.read(reinterpret_cast<char*>(&s.lifNeuronCount), sizeof(int))) return;
         }
@@ -1775,7 +1837,7 @@ void App::loadState() {
             if (len) { if (!f.read(p.data(), len)) return; }
             if (len > 0) std::cout << "[App] loadState: scene=" << si << " slot=" << i << " path=" << p << std::endl;
             }
-        if (isV11 || isV12) {
+        if (isV11 || isV12 || isV13) {
             const int savedPressureTargets = isV11 ? 21 : NUM_PRESSURE_TARGETS;
             for (int i = 0; i < savedPressureTargets; ++i) {
                 uint8_t e = 0;
@@ -1796,6 +1858,18 @@ void App::loadState() {
         else
             std::cerr << "[App] Ignoring out-of-range savedScene=" << savedScene << "\n";
     }
+
+    if (isV13) {
+        int modalScale = static_cast<int>(ModalScale::Dorian);
+        if (f.read(reinterpret_cast<char*>(&modalScale), sizeof(int))) {
+            modalScale = std::clamp(modalScale,
+                                    static_cast<int>(ModalScale::Ionian),
+                                    static_cast<int>(ModalScale::Locrian));
+            lifMidiModalScale_ = static_cast<ModalScale>(modalScale);
+        }
+    }
+
+    refreshLifMidiUi();
 
     // Apply the last-active scene to the engine
     if (currentScene_ >= 0) {

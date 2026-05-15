@@ -122,7 +122,7 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     });
     gui_.add(midiSettingsBtn_);
 
-    midiSettingsPanel_ = tgui::Panel::create({static_cast<float>(leftColW_ - 28), 128.0f});
+    midiSettingsPanel_ = tgui::Panel::create({static_cast<float>(leftColW_ - 28), 154.0f});
     midiSettingsPanel_->setPosition(14, 272);
     midiSettingsPanel_->getRenderer()->setBackgroundColor(tgui::Color(24, 24, 32));
     midiSettingsPanel_->setVisible(false);
@@ -225,6 +225,15 @@ void ControlWindow::buildGui(int width, int /*height*/) {
             onLIFMidiRangeMaxNudge(1);
     });
     midiSettingsPanel_->add(lifMidiRangeMaxUpBtn_);
+
+    lifMidiModeBtn_ = tgui::Button::create("Modal Scale: Dorian");
+    lifMidiModeBtn_->setPosition(6, 122);
+    lifMidiModeBtn_->setSize(leftColW_ - 40, 24);
+    lifMidiModeBtn_->onPress([this] {
+        if (onLIFMidiModeCycle)
+            onLIFMidiModeCycle();
+    });
+    midiSettingsPanel_->add(lifMidiModeBtn_);
 
     // ── 6 knobs: 2 rows × 3 columns ─────────────────────────────────────────────────
     // Keep the grid below the expanded MIDI settings panel so panel buttons stay clickable.
@@ -408,6 +417,12 @@ void ControlWindow::setLifMidiStyle(const std::string& styleName) {
     if (!lifMidiStyleBtn_)
         return;
     lifMidiStyleBtn_->setText("LIF MIDI Style: " + styleName);
+}
+
+void ControlWindow::setLifMidiMode(const std::string& modeName) {
+    if (!lifMidiModeBtn_)
+        return;
+    lifMidiModeBtn_->setText("Modal Scale: " + modeName);
 }
 
 void ControlWindow::setLifMidiKey(const std::string& keyName) {

@@ -94,12 +94,24 @@ private:
             Subdominant,
             Dominant,
         };
+        enum class ModalScale {
+            Ionian = 0,
+            Dorian,
+            Phrygian,
+            Lydian,
+            Mixolydian,
+            Aeolian,
+            Locrian,
+        };
         LifMidiStyle lifMidiStyle_ = LifMidiStyle::Pop;
+        ModalScale lifMidiModalScale_ = ModalScale::Dorian;
         int lifMidiKeySemitone_ = 0;   // 0=C, 1=C#, ... 11=B
         int lifMidiRangeMin_ = 36;
         int lifMidiRangeMax_ = 96;
         void cycleLifMidiStyle();
+        void cycleLifMidiModalScale();
         const char* lifMidiStyleName() const;
+        const char* lifMidiModalScaleName() const;
         const char* lifMidiKeyName() const;
         void nudgeLifMidiKey(int delta);
         void nudgeLifMidiRangeMin(int delta);

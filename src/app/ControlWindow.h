@@ -70,6 +70,9 @@ public:
     // Update the LIF MIDI voicing style label.
     void setLifMidiStyle(const std::string& styleName);
 
+    // Update the LIF modal scale label.
+    void setLifMidiMode(const std::string& modeName);
+
     // Update LIF MIDI key and note range labels.
     void setLifMidiKey(const std::string& keyName);
     void setLifMidiRange(int minNote, int maxNote);
@@ -135,6 +138,7 @@ public:
     // LIF MIDI controls.
     std::function<void()> onLIFMidiToggle;
     std::function<void()> onLIFMidiStyleCycle;
+    std::function<void()> onLIFMidiModeCycle;
     std::function<void(int delta)> onLIFMidiKeyNudge;
     std::function<void(int delta)> onLIFMidiRangeMinNudge;
     std::function<void(int delta)> onLIFMidiRangeMaxNudge;
@@ -219,6 +223,7 @@ private:
     tgui::Button::Ptr lifMidiToggleBtn_;
     tgui::Label::Ptr lifMidiStatusLabel_;
     tgui::Button::Ptr lifMidiStyleBtn_;
+    tgui::Button::Ptr lifMidiModeBtn_;
     tgui::Label::Ptr lifMidiKeyLabel_;
     tgui::Button::Ptr lifMidiKeyDownBtn_;
     tgui::Button::Ptr lifMidiKeyUpBtn_;
