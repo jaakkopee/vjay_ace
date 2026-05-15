@@ -173,7 +173,14 @@ void App::refreshLifMidiUi() {
 }
 
 const char* App::lifMidiModalScaleName() const {
-    switch (lifMidiModalScale_) {
+    // Current scene
+    return lifMidiModalScaleNameForScene(currentScene_);
+}
+
+const char* App::lifMidiModalScaleNameForScene(int sceneIdx) const {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES) return "Dorian";
+    ModalScale scale = scenes_[sceneIdx].modalScale;
+    switch (scale) {
         case ModalScale::Ionian:     return "Ionian";
         case ModalScale::Dorian:     return "Dorian";
         case ModalScale::Phrygian:   return "Phrygian";
@@ -181,7 +188,7 @@ const char* App::lifMidiModalScaleName() const {
         case ModalScale::Mixolydian: return "Mixolydian";
         case ModalScale::Aeolian:    return "Aeolian";
         case ModalScale::Locrian:    return "Locrian";
-        default:                     return "Dorian";
+        default:                          return "Dorian";
     }
 }
 
@@ -227,18 +234,22 @@ void App::cycleLifMidiStyle() {
 }
 
 void App::cycleLifMidiModalScale() {
+    if (currentScene_ < 0) return;
     resetLifMidiState();
-    switch (lifMidiModalScale_) {
-        case ModalScale::Ionian:     lifMidiModalScale_ = ModalScale::Dorian; break;
-        case ModalScale::Dorian:     lifMidiModalScale_ = ModalScale::Phrygian; break;
-        case ModalScale::Phrygian:   lifMidiModalScale_ = ModalScale::Lydian; break;
-        case ModalScale::Lydian:     lifMidiModalScale_ = ModalScale::Mixolydian; break;
-        case ModalScale::Mixolydian: lifMidiModalScale_ = ModalScale::Aeolian; break;
-        case ModalScale::Aeolian:    lifMidiModalScale_ = ModalScale::Locrian; break;
-        case ModalScale::Locrian:    lifMidiModalScale_ = ModalScale::Ionian; break;
+    ModalScale& scale = scenes_[currentScene_].modalScale;
+    switch (scale) {
+        case ModalScale::Ionian:     scale = ModalScale::Dorian; break;
+        case ModalScale::Dorian:     scale = ModalScale::Phrygian; break;
+        case ModalScale::Phrygian:   scale = ModalScale::Lydian; break;
+        case ModalScale::Lydian:     scale = ModalScale::Mixolydian; break;
+        case ModalScale::Mixolydian: scale = ModalScale::Aeolian; break;
+        case ModalScale::Aeolian:    scale = ModalScale::Locrian; break;
+        case ModalScale::Locrian:    scale = ModalScale::Ionian; break;
+        default:                     scale = ModalScale::Dorian; break;
     }
     refreshLifMidiUi();
     std::cout << "[LIF MIDI] modal scale=" << lifMidiModalScaleName() << std::endl;
+    saveState();
 }
 
 App::HarmonicFunction App::classifyLifFunction(int bin,
@@ -300,7 +311,9 @@ std::vector<int> App::lifMidiNotesForFunction(HarmonicFunction function,
     }
 
     const std::array<int, 7> intervals = [&]() {
-        switch (lifMidiModalScale_) {
+        ModalScale scale = (currentScene_ >= 0 && currentScene_ < NUM_SCENES)
+            ? scenes_[currentScene_].modalScale : ModalScale::Dorian;
+        switch (scale) {
             case ModalScale::Ionian:     return std::array<int, 7>{0, 2, 4, 5, 7, 9, 11};
             case ModalScale::Dorian:     return std::array<int, 7>{0, 2, 3, 5, 7, 9, 10};
             case ModalScale::Phrygian:   return std::array<int, 7>{0, 1, 3, 5, 7, 8, 10};
@@ -1501,8 +1514,18 @@ void App::updatePanZoomAnimation(float deltaTime) {
 
 // ── Scene select ──────────────────────────────────────────────────────────────
 
+
 void App::onSceneSelect(int sceneIdx) {
     if (sceneIdx < 0 || sceneIdx >= NUM_SCENES) return;
+
+    // Set LIF MIDI key to match the root note of the triggering scene pad.
+    // Scene pads are mapped to MIDI notes starting at C2 (36), each pad is a semitone.
+    // 0 = C, 1 = C#, ..., 11 = B
+    int midiNote = NOTE_SCENE_BASE + sceneIdx;
+    int key = midiNote % 12;
+    lifMidiKeySemitone_ = key;
+    refreshLifMidiUi();
+    resetLifMidiState();
 
     const int prevScene = currentScene_;
     currentScene_ = sceneIdx;
@@ -1734,7 +1757,7 @@ void App::saveState() const {
         if (!f) { std::cerr << "[App] Could not open temp state file for writing\n"; return; }
         // Write magic + version for future-proofing
         const uint32_t magic = 0x56414345; // 'VACE'
-        const uint32_t ver   = 13;
+        const uint32_t ver   = 14;
         f.write(reinterpret_cast<const char*>(&magic), 4);
         f.write(reinterpret_cast<const char*>(&ver),   4);
         // Write all scene states (knobs + image paths)
@@ -1756,6 +1779,9 @@ void App::saveState() const {
                 f.write(reinterpret_cast<const char*>(&len), sizeof(len));
                 if (len) f.write(p.data(), len);
             }
+            // Write per-scene modal scale
+            int modalScale = static_cast<int>(s.modalScale);
+            f.write(reinterpret_cast<const char*>(&modalScale), sizeof(int));
             const auto& ps = pressureSceneState_[si];
             for (uint8_t e : ps.enabled)
                 f.write(reinterpret_cast<const char*>(&e), sizeof(uint8_t));
@@ -1763,8 +1789,6 @@ void App::saveState() const {
                 f.write(reinterpret_cast<const char*>(&a), sizeof(float));
         }
         f.write(reinterpret_cast<const char*>(&currentScene_), sizeof(int));
-        const int modalScale = static_cast<int>(lifMidiModalScale_);
-        f.write(reinterpret_cast<const char*>(&modalScale), sizeof(int));
         if (!f) { std::cerr << "[App] State write error — temp file may be incomplete\n"; return; }
     } // ofstream closes + flushes here
     if (std::rename(tmp.c_str(), statePath().c_str()) != 0) {
@@ -1817,13 +1841,13 @@ void App::loadState() {
         for (int mi = 0; mi < savedModes; ++mi)
             for (float& v : s.knobs[mi])
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
-        if (isV8 || isV9 || isV10 || isV11 || isV12 || isV13) {
+        if (isV8 || isV9 || isV10 || isV11 || isV12 || isV13 || ver >= 14) {
             for (float& v : s.imageCrossfadeSpeedNorm)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
             for (float& v : s.sceneCrossfadeSpeedNorm)
                 if (!f.read(reinterpret_cast<char*>(&v), sizeof(float))) return;
         }
-        if (isV9 || isV10 || isV11 || isV12 || isV13) {
+        if (isV9 || isV10 || isV11 || isV12 || isV13 || ver >= 14) {
             if (!f.read(reinterpret_cast<char*>(&s.lifTopologyIndex), sizeof(int))) return;
             if (!f.read(reinterpret_cast<char*>(&s.lifNeuronCount), sizeof(int))) return;
         }
@@ -1836,7 +1860,16 @@ void App::loadState() {
             p.resize(len);
             if (len) { if (!f.read(p.data(), len)) return; }
             if (len > 0) std::cout << "[App] loadState: scene=" << si << " slot=" << i << " path=" << p << std::endl;
-            }
+        }
+        // Per-scene modal scale (v14+)
+        if (ver >= 14) {
+            int modalScale = static_cast<int>(ModalScale::Dorian);
+            if (!f.read(reinterpret_cast<char*>(&modalScale), sizeof(int))) return;
+            modalScale = std::clamp(modalScale,
+                                    static_cast<int>(ModalScale::Ionian),
+                                    static_cast<int>(ModalScale::Locrian));
+            s.modalScale = static_cast<ModalScale>(modalScale);
+        }
         if (isV11 || isV12 || isV13) {
             const int savedPressureTargets = isV11 ? 21 : NUM_PRESSURE_TARGETS;
             for (int i = 0; i < savedPressureTargets; ++i) {
@@ -1851,6 +1884,18 @@ void App::loadState() {
             }
         }
     }
+    // For v13 and earlier, load the global modal scale into all scenes
+    if (isV13) {
+        int modalScale = static_cast<int>(ModalScale::Dorian);
+        if (f.read(reinterpret_cast<char*>(&modalScale), sizeof(int))) {
+            modalScale = std::clamp(modalScale,
+                                    static_cast<int>(ModalScale::Ionian),
+                                    static_cast<int>(ModalScale::Locrian));
+            for (int si = 0; si < savedSceneCount && si < NUM_SCENES; ++si) {
+                scenes_[si].modalScale = static_cast<ModalScale>(modalScale);
+            }
+        }
+    }
     int savedScene = -1;
     if (f.read(reinterpret_cast<char*>(&savedScene), sizeof(int))) {
         if (savedScene >= 0 && savedScene < NUM_SCENES)
@@ -1859,15 +1904,7 @@ void App::loadState() {
             std::cerr << "[App] Ignoring out-of-range savedScene=" << savedScene << "\n";
     }
 
-    if (isV13) {
-        int modalScale = static_cast<int>(ModalScale::Dorian);
-        if (f.read(reinterpret_cast<char*>(&modalScale), sizeof(int))) {
-            modalScale = std::clamp(modalScale,
-                                    static_cast<int>(ModalScale::Ionian),
-                                    static_cast<int>(ModalScale::Locrian));
-            lifMidiModalScale_ = static_cast<ModalScale>(modalScale);
-        }
-    }
+    // Per-scene modal scale is now loaded with each scene (see above)
 
     refreshLifMidiUi();
 

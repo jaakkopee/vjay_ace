@@ -13,6 +13,19 @@
 #include <memory>
 #include <cstdint>
 
+#include <array>
+
+// ── ModalScale enum ──────────────────────────────────────────────────────────
+enum class ModalScale {
+    Ionian = 0,
+    Dorian,
+    Phrygian,
+    Lydian,
+    Mixolydian,
+    Aeolian,
+    Locrian,
+};
+
 // ── FxPatch (stub base for future per-patch state) ───────────────────────────
 // Each FX layer holds one active patch. Parameters come from MIDI knobs.
 // This will grow when individual effects need persistent state (e.g. MoldTrails agents).
@@ -22,6 +35,9 @@ struct FxPatch {
     float     audioGain     = 1.0f;
 };
 
+
+
+
 // ── SceneState ───────────────────────────────────────────────────────────────
 // Owns all 6-knob values across all 3 modes for a single scene.
 // knobs[modeIdx][knobIdx] = -1.0f means "not yet set" → first physical touch
@@ -29,6 +45,9 @@ struct FxPatch {
 struct SceneState {
     static constexpr int NMODES = 6;  // LayerLevel, FxAudio, FxParam, ImgRotate, ImgZoom, ImgPan
     std::array<std::array<float, NUM_KNOBS>, NMODES> knobs;
+
+    // Per-scene modal scale (for LIF MIDI)
+    ModalScale modalScale = ModalScale::Dorian;
 
     // Per-scene image paths for src layers 0, 2, 4 (slots 0, 1, 2)
     std::array<std::string, NUM_SRC_LAYERS> imgPaths;
@@ -94,17 +113,9 @@ private:
             Subdominant,
             Dominant,
         };
-        enum class ModalScale {
-            Ionian = 0,
-            Dorian,
-            Phrygian,
-            Lydian,
-            Mixolydian,
-            Aeolian,
-            Locrian,
-        };
+        // ModalScale enum is now defined globally above SceneState
         LifMidiStyle lifMidiStyle_ = LifMidiStyle::Pop;
-        ModalScale lifMidiModalScale_ = ModalScale::Dorian;
+        // ModalScale lifMidiModalScale_ = ModalScale::Dorian; // Now per-scene
         int lifMidiKeySemitone_ = 0;   // 0=C, 1=C#, ... 11=B
         int lifMidiRangeMin_ = 36;
         int lifMidiRangeMax_ = 96;
@@ -112,6 +123,7 @@ private:
         void cycleLifMidiModalScale();
         const char* lifMidiStyleName() const;
         const char* lifMidiModalScaleName() const;
+        const char* lifMidiModalScaleNameForScene(int sceneIdx) const;
         const char* lifMidiKeyName() const;
         void nudgeLifMidiKey(int delta);
         void nudgeLifMidiRangeMin(int delta);
