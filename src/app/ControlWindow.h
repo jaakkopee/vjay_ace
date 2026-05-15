@@ -108,6 +108,12 @@ public:
     // Fired when the B key is toggled (true = bypassed, false = active)
     std::function<void(bool bypassed)> onBKey;
 
+    // Experimental LIF sonification controls.
+    std::function<void()> onLIFToneToggle;
+    std::function<void(float delta)> onLIFToneTempoNudge;
+    std::function<void(float deltaHz)> onLIFToneMinFreqNudge;
+    std::function<void(float deltaHz)> onLIFToneMaxFreqNudge;
+
     // Update audio level meter (8 bands 0-1, rms 0-1). Called each frame.
     void setAudioBands(const float* bands, int count, float rms);
 
@@ -159,6 +165,17 @@ private:
     bool globalZoomKeyWas_ = false;
     bool nKeyWas_ = false;
     bool bKeyWas_ = false;
+    bool kKeyWas_ = false;
+    bool minusKeyWas_ = false;
+    bool equalKeyWas_ = false;
+    bool lBracketKeyWas_ = false;
+    bool rBracketKeyWas_ = false;
+    bool commaKeyWas_ = false;
+    bool periodKeyWas_ = false;
+    bool leftKeyWas_ = false;
+    bool rightKeyWas_ = false;
+    bool upKeyWas_ = false;
+    bool downKeyWas_ = false;
     bool audioBypassed_ = false;
 
     // Audio bands for meter drawing (8 bands + RMS)

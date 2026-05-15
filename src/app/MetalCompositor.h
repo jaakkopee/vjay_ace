@@ -71,6 +71,12 @@ public:
 
     void setLIFTopology(LIFNetwork::Topology topology);
     void setLIFNeuronCount(int neuronCount);
+    struct LIFDriver {
+        int srcSlot = 0;
+        float influenceNorm = 0.5f;
+        float topologyNorm = 0.0f;
+    };
+    void setLIFDrivers(const std::vector<LIFDriver>& drivers);
     std::array<float, LIFNetwork::NUM_TONE_BINS> sampleLIFColumn(float phase01) const;
 
     // Begin a crossfade for a source slot — call BEFORE uploading the new image.
@@ -174,6 +180,8 @@ private:
     std::array<float, 8> audioBands_ = {};
     float audioRms_ = 0.0f;
     std::array<float, NUM_FX_LAYERS> audioGain_ = {1.0f, 1.0f, 1.0f};
+    std::array<LIFDriver, NUM_FX_LAYERS> lifDrivers_ = {};
+    int lifDriverCount_ = 0;
     std::unique_ptr<LIFNetwork> lifNetwork_;
 
     id<MTLTexture> makeTexture(int w, int h, bool halfRes = false);

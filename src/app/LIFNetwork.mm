@@ -187,28 +187,31 @@ void LIFNetwork::step(id<MTLCommandBuffer> cmdBuffer,
                       id<MTLTexture> sourceTex,
                       const std::array<float, 8>& bands,
                       float rms,
+                      float influence,
                       float dt,
                       float timeSeconds) {
     if (!cmdBuffer || !sourceTex || !stateTex_ || !psoStep_ || !psoToTexture_)
         return;
 
+    influence = std::clamp(influence, 0.0f, 1.0f);
     auto* input = static_cast<float*>([inputBuf_ contents]);
+    const float influenceDrive = 0.35f + influence * 1.65f;
     for (int i = 0; i < neuronCount_; ++i) {
         int group = (i * static_cast<int>(bands.size())) / std::max(neuronCount_, 1);
         group = std::clamp(group, 0, static_cast<int>(bands.size()) - 1);
         float bandDrive = bands[group] * (0.30f + rms * 1.70f);
         float cross = bands[(group + 3) % static_cast<int>(bands.size())] * 0.15f;
-        input[i] = bandDrive + cross;
+        input[i] = (bandDrive + cross) * influenceDrive;
     }
 
     LIFSimParams sim;
     sim.neuronCount = static_cast<uint32_t>(neuronCount_);
     sim.gridSize = static_cast<uint32_t>(gridSize_);
     sim.dt = std::max(0.001f, dt);
-    sim.leak = 0.42f;
-    sim.threshold = 0.58f;
-    sim.reset = 0.08f;
-    sim.refractory = 0.06f;
+    sim.leak = 0.70f - influence * 0.45f;
+    sim.threshold = 0.75f - influence * 0.35f;
+    sim.reset = 0.04f + (1.0f - influence) * 0.10f;
+    sim.refractory = 0.03f + (1.0f - influence) * 0.08f;
     sim.rms = rms;
     sim.timeSeconds = timeSeconds;
 

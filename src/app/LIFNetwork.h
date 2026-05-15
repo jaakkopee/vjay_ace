@@ -28,6 +28,7 @@ public:
               id<MTLTexture> sourceTex,
               const std::array<float, 8>& bands,
               float rms,
+              float influence,
               float dt,
               float timeSeconds);
 

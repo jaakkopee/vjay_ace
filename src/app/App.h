@@ -179,6 +179,11 @@ private:
     std::vector<uint8_t> compositePixels_;
     sf::Texture          compositeTex_;
     float                lifToneScanPhase_ = 0.0f;
+    bool                 lifToneEnabled_ = true;
+    float                lifToneScanTempo_ = 0.22f;
+    float                lifToneMinFreqHz_ = 80.0f;
+    float                lifToneMaxFreqHz_ = 1600.0f;
+    bool sceneUsesLIF(int sceneIdx) const;
 
     // ── Wiring ───────────────────────────────────────────────────────────
     void wireCallbacks();

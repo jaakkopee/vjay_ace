@@ -301,6 +301,17 @@ void ControlWindow::update() {
 
     bool pNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::P);
     bool bNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::B);
+    bool kNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K);
+    bool minusNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Hyphen);
+    bool equalNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal);
+    bool lBracketNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LBracket);
+    bool rBracketNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RBracket);
+    bool commaNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Comma);
+    bool periodNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Period);
+    bool leftNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left);
+    bool rightNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right);
+    bool upNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up);
+    bool downNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down);
 
     if (shiftLockLabel_) {
         shiftLockLabel_->setText(std::string("Caps Lock: ") + (capsLockActive ? "On" : "Off"));
@@ -350,6 +361,60 @@ void ControlWindow::update() {
         if (onBKey) onBKey(audioBypassed_);
     }
     bKeyWas_ = bNow;
+
+    // K key: toggle LIF sonification on/off.
+    if (kNow && !kKeyWas_) {
+        if (onLIFToneToggle) onLIFToneToggle();
+    }
+    kKeyWas_ = kNow;
+
+    // Frequency range controls (edge-triggered).
+    const float freqStep = rawShiftNow ? 80.0f : 20.0f;
+    if (minusNow && !minusKeyWas_) {
+        if (onLIFToneMinFreqNudge) onLIFToneMinFreqNudge(-freqStep);
+    }
+    if (equalNow && !equalKeyWas_) {
+        if (onLIFToneMinFreqNudge) onLIFToneMinFreqNudge(freqStep);
+    }
+    if (lBracketNow && !lBracketKeyWas_) {
+        if (onLIFToneMaxFreqNudge) onLIFToneMaxFreqNudge(-freqStep);
+    }
+    if (rBracketNow && !rBracketKeyWas_) {
+        if (onLIFToneMaxFreqNudge) onLIFToneMaxFreqNudge(freqStep);
+    }
+    // Arrow pad mirrors frequency controls:
+    // Left/Right = min freq down/up, Down/Up = max freq down/up.
+    if (leftNow && !leftKeyWas_) {
+        if (onLIFToneMinFreqNudge) onLIFToneMinFreqNudge(-freqStep);
+    }
+    if (rightNow && !rightKeyWas_) {
+        if (onLIFToneMinFreqNudge) onLIFToneMinFreqNudge(freqStep);
+    }
+    if (downNow && !downKeyWas_) {
+        if (onLIFToneMaxFreqNudge) onLIFToneMaxFreqNudge(-freqStep);
+    }
+    if (upNow && !upKeyWas_) {
+        if (onLIFToneMaxFreqNudge) onLIFToneMaxFreqNudge(freqStep);
+    }
+    minusKeyWas_ = minusNow;
+    equalKeyWas_ = equalNow;
+    lBracketKeyWas_ = lBracketNow;
+    rBracketKeyWas_ = rBracketNow;
+    leftKeyWas_ = leftNow;
+    rightKeyWas_ = rightNow;
+    upKeyWas_ = upNow;
+    downKeyWas_ = downNow;
+
+    // Tempo controls (horizontal scan speed): comma slower, period faster.
+    const float tempoStep = rawShiftNow ? 0.08f : 0.02f;
+    if (commaNow && !commaKeyWas_) {
+        if (onLIFToneTempoNudge) onLIFToneTempoNudge(-tempoStep);
+    }
+    if (periodNow && !periodKeyWas_) {
+        if (onLIFToneTempoNudge) onLIFToneTempoNudge(tempoStep);
+    }
+    commaKeyWas_ = commaNow;
+    periodKeyWas_ = periodNow;
 
     // Redraw pressure meter each frame
     drawPressureMeter();

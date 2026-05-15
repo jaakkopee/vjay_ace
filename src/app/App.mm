@@ -93,6 +93,14 @@ App::~App() {
     lifToneSynth_.stopStream();
 }
 
+bool App::sceneUsesLIF(int sceneIdx) const {
+    if (sceneIdx < 0 || sceneIdx >= NUM_SCENES) return false;
+    const Scene& sc = SCENES[sceneIdx];
+    for (FxPatchId patch : sc.fx)
+        if (isLIFPatch(patch)) return true;
+    return false;
+}
+
 bool App::init() {
     // ── Register signal handlers so Ctrl-C saves state before exit ───────
     g_sigApp = this;
@@ -165,6 +173,7 @@ bool App::init() {
 
     if (!lifToneSynth_.startStream())
         std::cerr << "[App] LIF tone synth init failed\n";
+    lifToneSynth_.setFrequencyRange(lifToneMinFreqHz_, lifToneMaxFreqHz_);
 
     // ── Knob pickup state ────────────────────────────────────────────────
     knobLastPhys_.fill(0.5f);
@@ -402,11 +411,32 @@ void App::wireCallbacks() {
     };
     controlWin_.onBKey = [this](bool bypassed) {
         audioBypassed_ = bypassed;
+        lifToneSynth_.setBypass(bypassed);
         // Zero out bands in compositor immediately when bypass toggles on
         if (bypassed) {
             const float zeros[8] = {};
             compositor_.setAudioBands(zeros, 8, 0.0f);
         }
+    };
+    controlWin_.onLIFToneToggle = [this]() {
+        lifToneEnabled_ = !lifToneEnabled_;
+        if (!lifToneEnabled_)
+            lifToneSynth_.setColumnEnergies({});
+        std::cout << "[LIF Tone] " << (lifToneEnabled_ ? "enabled" : "disabled") << std::endl;
+    };
+    controlWin_.onLIFToneTempoNudge = [this](float delta) {
+        lifToneScanTempo_ = std::clamp(lifToneScanTempo_ + delta, 0.01f, 4.0f);
+        std::cout << "[LIF Tone] tempo=" << lifToneScanTempo_ << " cycles/s" << std::endl;
+    };
+    controlWin_.onLIFToneMinFreqNudge = [this](float deltaHz) {
+        lifToneMinFreqHz_ = std::clamp(lifToneMinFreqHz_ + deltaHz, 20.0f, lifToneMaxFreqHz_ - 10.0f);
+        lifToneSynth_.setFrequencyRange(lifToneMinFreqHz_, lifToneMaxFreqHz_);
+        std::cout << "[LIF Tone] range=" << lifToneMinFreqHz_ << "-" << lifToneMaxFreqHz_ << " Hz" << std::endl;
+    };
+    controlWin_.onLIFToneMaxFreqNudge = [this](float deltaHz) {
+        lifToneMaxFreqHz_ = std::clamp(lifToneMaxFreqHz_ + deltaHz, lifToneMinFreqHz_ + 10.0f, 12000.0f);
+        lifToneSynth_.setFrequencyRange(lifToneMinFreqHz_, lifToneMaxFreqHz_);
+        std::cout << "[LIF Tone] range=" << lifToneMinFreqHz_ << "-" << lifToneMaxFreqHz_ << " Hz" << std::endl;
     };
     mediaPickerWin_.onFileSelected = [this](int slot, const std::string& path){
         onImageSelected(slot, path);
@@ -1562,13 +1592,36 @@ void App::processFrame() {
         controlWin_.setAudioBands(zeros, 8, 0.0f);
     }
 
+    // Drive LIF simulation from all active scene LIF patch params.
+    if (currentScene_ >= 0) {
+        std::vector<MetalCompositor::LIFDriver> drivers;
+        const int fxMi = static_cast<int>(KnobMode::FxParam);
+        const SceneState& s = scenes_[currentScene_];
+        const Scene& sc = SCENES[currentScene_];
+        for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
+            if (!isLIFPatch(sc.fx[slot])) continue;
+            const float p0Stored = s.knobs[fxMi][slot * 2];
+            const float p1Stored = s.knobs[fxMi][slot * 2 + 1];
+            const float influence = (p0Stored >= 0.0f) ? p0Stored : sc.params[slot][0];
+            const float topology = (p1Stored >= 0.0f) ? p1Stored : sc.params[slot][1];
+            drivers.push_back({slot, influence, topology});
+        }
+        compositor_.setLIFDrivers(drivers);
+    } else {
+        compositor_.setLIFDrivers({});
+    }
+
     // GPU composite → CPU readback
     if (compositor_.composite(compositePixels_)) {
         // Experimental sonification: horizontal scan = time, vertical bins = pitch.
-        lifToneScanPhase_ += (1.0f / 60.0f) * 0.22f;
-        if (lifToneScanPhase_ >= 1.0f)
-            lifToneScanPhase_ -= 1.0f;
-        lifToneSynth_.setColumnEnergies(compositor_.sampleLIFColumn(lifToneScanPhase_));
+        if (lifToneEnabled_ && !audioBypassed_ && sceneUsesLIF(currentScene_)) {
+            lifToneScanPhase_ += (1.0f / 60.0f) * lifToneScanTempo_;
+            if (lifToneScanPhase_ >= 1.0f)
+                lifToneScanPhase_ -= std::floor(lifToneScanPhase_);
+            lifToneSynth_.setColumnEnergies(compositor_.sampleLIFColumn(lifToneScanPhase_));
+        } else {
+            lifToneSynth_.setColumnEnergies({});
+        }
 
         perfWin_.present(compositePixels_);
         compositeTex_.update(compositePixels_.data());

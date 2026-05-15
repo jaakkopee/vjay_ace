@@ -261,6 +261,15 @@ void MetalCompositor::setLIFNeuronCount(int neuronCount) {
         lifNetwork_->setNeuronCount(neuronCount);
 }
 
+void MetalCompositor::setLIFDrivers(const std::vector<LIFDriver>& drivers) {
+    lifDriverCount_ = std::min(static_cast<int>(drivers.size()), NUM_FX_LAYERS);
+    for (int i = 0; i < lifDriverCount_; ++i) {
+        lifDrivers_[i].srcSlot = std::clamp(drivers[i].srcSlot, 0, NUM_SRC_LAYERS - 1);
+        lifDrivers_[i].influenceNorm = std::clamp(drivers[i].influenceNorm, 0.0f, 1.0f);
+        lifDrivers_[i].topologyNorm = std::clamp(drivers[i].topologyNorm, 0.0f, 1.0f);
+    }
+}
+
 std::array<float, LIFNetwork::NUM_TONE_BINS> MetalCompositor::sampleLIFColumn(float phase01) const {
     if (!lifNetwork_)
         return {};
@@ -591,8 +600,13 @@ bool MetalCompositor::composite(std::vector<uint8_t>& outRGBA) {
 
     id<MTLCommandBuffer> cmd = [cmdQueue_ commandBuffer];
 
-    if (lifNetwork_) {
-        lifNetwork_->step(cmd, layerTex_[0], audioBands_, audioRms_, dt, now);
+    if (lifNetwork_ && lifDriverCount_ > 0) {
+        for (int i = 0; i < lifDriverCount_; ++i) {
+            const auto& driver = lifDrivers_[i];
+            lifNetwork_->setTopology(topologyFromParam(driver.topologyNorm));
+            const int srcLayer = std::clamp(driver.srcSlot, 0, NUM_SRC_LAYERS - 1) * 2;
+            lifNetwork_->step(cmd, layerTex_[srcLayer], audioBands_, audioRms_, driver.influenceNorm, dt, now);
+        }
     }
 
     // For each FX slot (0=layer1, 1=layer3, 2=layer5):
