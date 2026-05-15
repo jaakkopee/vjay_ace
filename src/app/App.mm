@@ -192,7 +192,9 @@ void App::nudgeLifMidiRangeMin(int delta) {
 void App::nudgeLifMidiRangeMax(int delta) {
     if (delta == 0) return;
     resetLifMidiState();
+    int oldMax = lifMidiRangeMax_;
     lifMidiRangeMax_ = std::clamp(lifMidiRangeMax_ + delta, lifMidiRangeMin_ + 1, 127);
+    std::cout << "[LIF MIDI] nudgeLifMidiRangeMax: oldMax=" << oldMax << ", delta=" << delta << ", newMax=" << lifMidiRangeMax_ << ", min=" << lifMidiRangeMin_ << std::endl;
     refreshLifMidiUi();
     std::cout << "[LIF MIDI] range=" << lifMidiRangeMin_ << "-" << lifMidiRangeMax_ << std::endl;
 }
