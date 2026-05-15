@@ -78,6 +78,8 @@ public:
     void saveState() const;   // public: called by signal handler and onImageSelected
 
 private:
+        // LIF MIDI note state (per bin)
+        std::array<bool, 16> lifMidiNoteOn_ = {};
     // Subsystems
     LayerManager      layers_;
     MidiRouter        midi_;
@@ -180,6 +182,10 @@ private:
     sf::Texture          compositeTex_;
     float                lifToneScanPhase_ = 0.0f;
     bool                 lifToneEnabled_ = true;
+    bool                 lifMidiEnabled_ = false;
+    bool                 lifMidiNoSceneWarned_ = false;
+        // MIDI output toggle for LIF networks
+        void toggleLifMidi();
     float                lifToneScanTempo_ = 0.22f;
     float                lifToneMinFreqHz_ = 80.0f;
     float                lifToneMaxFreqHz_ = 1600.0f;

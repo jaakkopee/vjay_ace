@@ -11,6 +11,9 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+#include <algorithm>
+#include <cctype>
+#include <iostream>
 
 // ── MIDI message helpers ──────────────────────────────────────────────────────
 
@@ -36,6 +39,36 @@ static std::string noteName(unsigned char note) {
     int oct = (note / 12) - 1;
     std::string n = noteNames[note % 12];
     return n + std::to_string(oct);
+}
+
+static int findPreferredPortIndex(const std::vector<std::string>& ports,
+                                  const std::string& preferredSubstr) {
+    std::string needle = preferredSubstr;
+    std::transform(needle.begin(), needle.end(), needle.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    for (int i = 0; i < static_cast<int>(ports.size()); ++i) {
+        std::string name = ports[i];
+        std::transform(name.begin(), name.end(), name.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (name.find(needle) != std::string::npos)
+            return i;
+    }
+    return -1;
+}
+
+static bool isLikelyLIFMessage(const std::vector<unsigned char>& msg) {
+    if (msg.empty()) return false;
+    const unsigned char status = msg[0] & 0xF0;
+    const int channel = (msg[0] & 0x0F) + 1;
+    if (channel != 1) return false;
+
+    // LIF currently emits Note On/Off on channel 1 in range C4..D#5 (60..75).
+    if ((status == 0x90 || status == 0x80) && msg.size() >= 2) {
+        const int note = static_cast<int>(msg[1]);
+        return note >= 60 && note <= 75;
+    }
+    return false;
 }
 
 // ── MidiMonitor ───────────────────────────────────────────────────────────────
@@ -121,8 +154,10 @@ void MidiMonitor::refreshPorts() {
     if (count == 0) {
         portCombo_->addItem("(no MIDI ports found)");
     } else {
-        portCombo_->setSelectedItemByIndex(0);
-        openPort(0);
+        int preferred = findPreferredPortIndex(portNames_, "IAC Driver");
+        if (preferred < 0) preferred = 0;
+        portCombo_->setSelectedItemByIndex(static_cast<std::size_t>(preferred));
+        openPort(preferred);
     }
 }
 
@@ -187,6 +222,10 @@ void MidiMonitor::midiCallback(double deltaTime,
     auto* self = static_cast<MidiMonitor*>(userData);
     if (!message || message->empty()) return;
     std::string line = self->formatMessage(deltaTime, *message);
+    if (isLikelyLIFMessage(*message)) {
+        line = "[LIF] " + line;
+        std::cout << line << std::endl;
+    }
     self->appendEvent(line);
 }
 

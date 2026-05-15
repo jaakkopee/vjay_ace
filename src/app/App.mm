@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
+#include <cctype>
+#include <cstring>
 
 // ── Signal handling: save state on Ctrl-C / kill ─────────────────────────────
 static App* g_sigApp = nullptr;
@@ -60,6 +62,31 @@ static LIFNetwork::Topology topologyFromIndex(int index) {
 static const char* topologyIndexToName(int index) {
     static const char* names[] = {"Ring", "Fully", "Feedfwd", "Random", "SmWorld"};
     return names[std::clamp(index, 0, 4)];
+}
+
+static int findPortIndexByNameContains(const std::vector<std::string>& names,
+                                       const std::string& needle) {
+    std::string needleLower = needle;
+    std::transform(needleLower.begin(), needleLower.end(), needleLower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    for (int i = 0; i < static_cast<int>(names.size()); ++i) {
+        std::string nameLower = names[i];
+        std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (nameLower.find(needleLower) != std::string::npos)
+            return i;
+    }
+    return -1;
+}
+
+static int findPortIndexByExactName(const std::vector<std::string>& names,
+                                    const std::string& wanted) {
+    for (int i = 0; i < static_cast<int>(names.size()); ++i) {
+        if (names[i] == wanted)
+            return i;
+    }
+    return -1;
 }
 
 static std::array<std::string, 24> pressureTargetNames() {
@@ -158,14 +185,58 @@ bool App::init() {
     if (!compositeTex_.resize({WORK_W, WORK_H}))
         std::cerr << "[App] Cannot create composite SFML texture\n";
 
+
     // ── MIDI ─────────────────────────────────────────────────────────────
     auto ports = midi_.portNames();
+    int selectedInPort = -1;
     if (!ports.empty()) {
-        midi_.openPort(0);
-        std::cout << "[App] MIDI opened: " << ports[0] << "\n";
+        selectedInPort = findPortIndexByNameContains(ports, "MPD218");
+        if (selectedInPort < 0) selectedInPort = 0;
+        if (midi_.openPort(selectedInPort))
+            std::cout << "[App] MIDI IN opened: " << ports[selectedInPort] << "\n";
     } else {
-        std::cout << "[App] No MIDI ports found\n";
+        std::cout << "[App] No MIDI IN ports found\n";
     }
+
+    auto outPorts = midi_.outputPortNames();
+    int selectedOutPort = -1;
+    if (!outPorts.empty()) {
+        selectedOutPort = findPortIndexByNameContains(outPorts, "IAC Driver");
+        if (selectedOutPort < 0) selectedOutPort = 0;
+        if (midi_.openOutputPort(selectedOutPort))
+            std::cout << "[App] MIDI OUT opened: " << outPorts[selectedOutPort] << "\n";
+    } else {
+        std::cout << "[App] No MIDI OUT ports found\n";
+    }
+
+    // Optional startup self-test for outbound MIDI path.
+    // Enable with: VJAY_TEST_MIDI_OUT=1 ./vjay_ace
+    if (midi_.isOutputOpen()) {
+        const char* midiTest = std::getenv("VJAY_TEST_MIDI_OUT");
+        if (midiTest && std::strcmp(midiTest, "1") == 0) {
+            midi_.sendNoteOn(1, 60, 100);
+            midi_.sendNoteOff(1, 60, 0);
+            std::cout << "[App] MIDI OUT self-test sent (Ch1 C4 on/off)\n";
+        }
+    }
+
+    controlWin_.setMidiPortLists(ports, selectedInPort, outPorts, selectedOutPort);
+    controlWin_.onMidiInPortChanged = [this](const std::string& name) {
+        auto names = midi_.portNames();
+        int idx = findPortIndexByExactName(names, name);
+        if (idx < 0) idx = findPortIndexByNameContains(names, name);
+        if (idx >= 0 && idx < static_cast<int>(names.size()) && midi_.openPort(idx)) {
+            std::cout << "[App] MIDI IN switched: " << names[idx] << "\n";
+        }
+    };
+    controlWin_.onMidiOutPortChanged = [this](const std::string& name) {
+        auto names = midi_.outputPortNames();
+        int idx = findPortIndexByExactName(names, name);
+        if (idx < 0) idx = findPortIndexByNameContains(names, name);
+        if (idx >= 0 && idx < static_cast<int>(names.size()) && midi_.openOutputPort(idx)) {
+            std::cout << "[App] MIDI OUT switched: " << names[idx] << "\n";
+        }
+    };
 
     // ── Audio capture ─────────────────────────────────────────────────
     if (!audio_.start())
@@ -207,6 +278,15 @@ bool App::init() {
     }
 
     return true;
+}
+
+void App::toggleLifMidi() {
+    lifMidiEnabled_ = !lifMidiEnabled_;
+    std::cout << "[LIF MIDI] " << (lifMidiEnabled_ ? "enabled" : "disabled") << std::endl;
+    if (!lifMidiEnabled_) {
+        lifMidiNoSceneWarned_ = false;
+    }
+    controlWin_.setLifMidiStatus(lifMidiEnabled_, 1, 60);
 }
 
 // ── Callbacks ─────────────────────────────────────────────────────────────────
@@ -441,6 +521,9 @@ void App::wireCallbacks() {
     mediaPickerWin_.onFileSelected = [this](int slot, const std::string& path){
         onImageSelected(slot, path);
     };
+
+    // Keyboard shortcut: M key toggles LIF MIDI output
+    controlWin_.onLIFMidiToggle = [this]() { toggleLifMidi(); };
 }
 
 // ── Engine helper: apply one knob value to the right engine target ────────────
@@ -1614,13 +1697,87 @@ void App::processFrame() {
     // GPU composite → CPU readback
     if (compositor_.composite(compositePixels_)) {
         // Experimental sonification: horizontal scan = time, vertical bins = pitch.
-        if (lifToneEnabled_ && !audioBypassed_ && sceneUsesLIF(currentScene_)) {
+        std::array<float, 16> lifBins = {};
+        const bool lifSceneActive = sceneUsesLIF(currentScene_);
+        if (lifSceneActive && (lifToneEnabled_ || lifMidiEnabled_)) {
             lifToneScanPhase_ += (1.0f / 60.0f) * lifToneScanTempo_;
             if (lifToneScanPhase_ >= 1.0f)
                 lifToneScanPhase_ -= std::floor(lifToneScanPhase_);
-            lifToneSynth_.setColumnEnergies(compositor_.sampleLIFColumn(lifToneScanPhase_));
+        }
+        if (lifSceneActive) {
+            lifBins = compositor_.sampleLIFColumn(lifToneScanPhase_);
+        }
+        if (lifToneEnabled_ && !audioBypassed_ && lifSceneActive) {
+            lifToneSynth_.setColumnEnergies(lifBins);
         } else {
             lifToneSynth_.setColumnEnergies({});
+        }
+
+        // ── LIF-to-MIDI output ──
+        if (lifMidiEnabled_ && lifSceneActive) {
+            lifMidiNoSceneWarned_ = false;
+            constexpr int midiChannel = 1; // 1-based
+            constexpr int baseNote = 60;   // C4
+            float maxEnergy = 0.0f;
+            for (float v : lifBins) maxEnergy = std::max(maxEnergy, v);
+
+            // Adaptive thresholds prevent getting stuck on one bin when absolute
+            // levels are low or compressed in a given scene/topology.
+            const float noteOnThreshold = std::max(0.18f, maxEnergy * 0.55f);
+            const float noteOffThreshold = std::max(0.12f, maxEnergy * 0.40f);
+
+            int strongestBin = 0;
+            float strongestVal = lifBins[0];
+            for (int bin = 1; bin < 16; ++bin) {
+                if (lifBins[bin] > strongestVal) {
+                    strongestVal = lifBins[bin];
+                    strongestBin = bin;
+                }
+            }
+
+            bool anyActiveCandidate = false;
+            for (int bin = 0; bin < 16; ++bin) {
+                const bool candidate = lifMidiNoteOn_[bin]
+                    ? (lifBins[bin] > noteOffThreshold)
+                    : (lifBins[bin] > noteOnThreshold);
+                if (candidate) {
+                    anyActiveCandidate = true;
+                    break;
+                }
+            }
+
+            for (int bin = 0; bin < 16; ++bin) {
+                bool active = lifMidiNoteOn_[bin]
+                    ? (lifBins[bin] > noteOffThreshold)
+                    : (lifBins[bin] > noteOnThreshold);
+
+                // Fail-safe: if thresholds produce no active bins but network has
+                // non-trivial energy, keep the strongest bin alive.
+                if (!anyActiveCandidate && maxEnergy > 0.03f && bin == strongestBin)
+                    active = true;
+
+                if (active && !lifMidiNoteOn_[bin]) {
+                    const float rel = lifBins[bin] / std::max(maxEnergy, 0.001f);
+                    const float curved = std::pow(std::clamp(rel, 0.0f, 1.0f), 0.65f);
+                    const int velocity = std::clamp(static_cast<int>(20.0f + curved * 107.0f), 20, 127);
+                    midi_.sendNoteOn(midiChannel, baseNote + bin, velocity);
+                    lifMidiNoteOn_[bin] = true;
+                } else if (!active && lifMidiNoteOn_[bin]) {
+                    midi_.sendNoteOff(midiChannel, baseNote + bin);
+                    lifMidiNoteOn_[bin] = false;
+                }
+            }
+        } else if (lifMidiEnabled_ && !lifSceneActive && !lifMidiNoSceneWarned_) {
+            std::cout << "[LIF MIDI] enabled but current scene has no LIF patch; select a LIF scene to get MIDI notes." << std::endl;
+            lifMidiNoSceneWarned_ = true;
+        } else {
+            // All notes off if disabled
+            for (int bin = 0; bin < 16; ++bin) {
+                if (lifMidiNoteOn_[bin]) {
+                    midi_.sendNoteOff(1, 60 + bin);
+                    lifMidiNoteOn_[bin] = false;
+                }
+            }
         }
 
         perfWin_.present(compositePixels_);
@@ -1628,6 +1785,13 @@ void App::processFrame() {
     } else {
         lifToneSynth_.setColumnEnergies({});
         perfWin_.clearBlack();
+        // All notes off if frame fails
+        for (int bin = 0; bin < 16; ++bin) {
+            if (lifMidiNoteOn_[bin]) {
+                midi_.sendNoteOff(1, 60 + bin);
+                lifMidiNoteOn_[bin] = false;
+            }
+        }
     }
 }
 

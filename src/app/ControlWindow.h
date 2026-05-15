@@ -8,6 +8,7 @@
 #include <chrono>
 #include <functional>
 #include <string>
+#include <vector>
 
 // ── ControlWindow ─────────────────────────────────────────────────────────────
 // Screen 1 — two-column layout:
@@ -63,6 +64,15 @@ public:
     // Update mode label.
     void setKnobMode(KnobMode mode);
 
+    // Update LIF MIDI status label and button.
+    void setLifMidiStatus(bool enabled, int channel, int baseNote);
+
+    // Update MIDI port lists and active selection indexes.
+    void setMidiPortLists(const std::vector<std::string>& inPorts,
+                          int inIdx,
+                          const std::vector<std::string>& outPorts,
+                          int outIdx);
+
     // Fired when user drags a knob: knobIdx 0-5, normValue 0.0-1.0
     std::function<void(int knobIdx, float normValue)> onKnobDrag;
 
@@ -114,6 +124,13 @@ public:
     std::function<void(float deltaHz)> onLIFToneMinFreqNudge;
     std::function<void(float deltaHz)> onLIFToneMaxFreqNudge;
 
+    // LIF MIDI controls.
+    std::function<void()> onLIFMidiToggle;
+
+    // Runtime MIDI port selection callbacks (selected port name).
+    std::function<void(const std::string&)> onMidiInPortChanged;
+    std::function<void(const std::string&)> onMidiOutPortChanged;
+
     // Update audio level meter (8 bands 0-1, rms 0-1). Called each frame.
     void setAudioBands(const float* bands, int count, float rms);
 
@@ -163,6 +180,7 @@ private:
     bool globalAudioGainKeyWas_ = false;
     bool globalRotationKeyWas_ = false;
     bool globalZoomKeyWas_ = false;
+    bool mKeyWas_ = false;
     bool nKeyWas_ = false;
     bool bKeyWas_ = false;
     bool kKeyWas_ = false;
@@ -184,6 +202,13 @@ private:
     float pressureNorm_ = 0.0f;
     tgui::CanvasSFML::Ptr audioMeterCanvas_;
     tgui::CanvasSFML::Ptr pressureMeterCanvas_;
+    tgui::Button::Ptr lifMidiToggleBtn_;
+    tgui::Label::Ptr lifMidiStatusLabel_;
+    tgui::Button::Ptr midiSettingsBtn_;
+    tgui::Panel::Ptr midiSettingsPanel_;
+    tgui::ComboBox::Ptr midiInPortBox_;
+    tgui::ComboBox::Ptr midiOutPortBox_;
+    bool midiSettingsExpanded_ = false;
 
     void buildGui(int width, int height);
     void drawKnob(int knobIdx);

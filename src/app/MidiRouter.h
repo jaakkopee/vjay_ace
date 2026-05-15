@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <mutex>
 
 // ── MidiRouter ───────────────────────────────────────────────────────────────
 // Opens one MIDI input port and routes incoming messages according to the
@@ -68,6 +69,20 @@ public:
 
     KnobMode currentMode() const { return mode_; }
 
+    // ── MIDI output ─────────────────────────────────────────────
+    // Returns list of available output port names.
+    std::vector<std::string> outputPortNames() const;
+    // Open output port by index. Returns false on error.
+    bool openOutputPort(int index);
+    void closeOutputPort();
+    bool isOutputOpen() const;
+    // Send a Note On message (channel 1-based, 0-15; velocity 0-127)
+    void sendNoteOn(int channel, int note, int velocity);
+    // Send a Note Off message
+    void sendNoteOff(int channel, int note, int velocity=0);
+    // Send a Control Change (CC) message
+    void sendCC(int channel, int cc, int value);
+
 private:
     std::unique_ptr<RtMidiIn> midiIn_;
     KnobMode mode_ = KnobMode::FxParam;
@@ -85,4 +100,7 @@ private:
     int ccToKnob(int cc);
     // Map a note to a scene index 0–31; returns false if not a scene note
     static bool noteToScene(int note, int& outSceneIdx);
+
+    std::unique_ptr<RtMidiOut> midiOut_;
+    void sendMessage(const std::vector<unsigned char>& msg);
 };

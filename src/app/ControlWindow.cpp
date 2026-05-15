@@ -1,3 +1,4 @@
+#include <SFML/Window/Keyboard.hpp>
 #include "ControlWindow.h"
 #include "CapsLockDetector.h"
 #include <cmath>
@@ -60,9 +61,75 @@ void ControlWindow::buildGui(int width, int /*height*/) {
     pressureMeterCanvas_->setPosition(14, 106);
     gui_.add(pressureMeterCanvas_);
 
+    // ── LIF MIDI output controls ─────────────────────────────────────────
+    lifMidiToggleBtn_ = tgui::Button::create("Enable LIF MIDI (M)");
+    lifMidiToggleBtn_->setPosition(14, 124);
+    lifMidiToggleBtn_->setSize(leftColW_ - 28, 26);
+    lifMidiToggleBtn_->onPress([this] {
+        if (onLIFMidiToggle) onLIFMidiToggle();
+    });
+    gui_.add(lifMidiToggleBtn_);
+
+    lifMidiStatusLabel_ = tgui::Label::create("LIF MIDI: Off");
+    lifMidiStatusLabel_->setPosition(14, 152);
+    lifMidiStatusLabel_->setTextSize(12);
+    lifMidiStatusLabel_->getRenderer()->setTextColor(TEXT_DIM);
+    gui_.add(lifMidiStatusLabel_);
+
+    // ── MIDI Settings dropdown section ──────────────────────────────────
+    midiSettingsBtn_ = tgui::Button::create("MIDI Settings ▼");
+    midiSettingsBtn_->setPosition(14, 172);
+    midiSettingsBtn_->setSize(leftColW_ - 28, 24);
+    midiSettingsBtn_->onPress([this] {
+        midiSettingsExpanded_ = !midiSettingsExpanded_;
+        if (midiSettingsPanel_)
+            midiSettingsPanel_->setVisible(midiSettingsExpanded_);
+        if (midiSettingsBtn_)
+            midiSettingsBtn_->setText(midiSettingsExpanded_ ? "MIDI Settings ▲" : "MIDI Settings ▼");
+    });
+    gui_.add(midiSettingsBtn_);
+
+    midiSettingsPanel_ = tgui::Panel::create({static_cast<float>(leftColW_ - 28), 76.0f});
+    midiSettingsPanel_->setPosition(14, 198);
+    midiSettingsPanel_->getRenderer()->setBackgroundColor(tgui::Color(24, 24, 32));
+    midiSettingsPanel_->setVisible(false);
+    gui_.add(midiSettingsPanel_);
+
+    auto midiInLabel = tgui::Label::create("Input");
+    midiInLabel->setPosition(6, 4);
+    midiInLabel->setTextSize(11);
+    midiInLabel->getRenderer()->setTextColor(TEXT_DIM);
+    midiSettingsPanel_->add(midiInLabel);
+
+    midiInPortBox_ = tgui::ComboBox::create();
+    midiInPortBox_->setPosition(6, 20);
+    midiInPortBox_->setSize(leftColW_ - 40, 22);
+    midiInPortBox_->setDefaultText("Select MIDI input");
+    midiInPortBox_->onItemSelect([this] {
+        if (onMidiInPortChanged)
+            onMidiInPortChanged(midiInPortBox_->getSelectedItem().toStdString());
+    });
+    midiSettingsPanel_->add(midiInPortBox_);
+
+    auto midiOutLabel = tgui::Label::create("Output");
+    midiOutLabel->setPosition(6, 46);
+    midiOutLabel->setTextSize(11);
+    midiOutLabel->getRenderer()->setTextColor(TEXT_DIM);
+    midiSettingsPanel_->add(midiOutLabel);
+
+    midiOutPortBox_ = tgui::ComboBox::create();
+    midiOutPortBox_->setPosition(80, 44);
+    midiOutPortBox_->setSize(leftColW_ - 114, 22);
+    midiOutPortBox_->setDefaultText("Select MIDI output");
+    midiOutPortBox_->onItemSelect([this] {
+        if (onMidiOutPortChanged)
+            onMidiOutPortChanged(midiOutPortBox_->getSelectedItem().toStdString());
+    });
+    midiSettingsPanel_->add(midiOutPortBox_);
+
     // ── 6 knobs: 2 rows × 3 columns ─────────────────────────────────────────────────
     // Row 0 (knobs 0-2): y=112; row 1 (knobs 3-5): y=112+KNOB_SIZE+90
-    const int rowYBase[2] = { 112, 112 + KNOB_SIZE + 90 };
+    const int rowYBase[2] = { 286, 286 + KNOB_SIZE + 90 };
 
     for (int i = 0; i < NUM_KNOBS; ++i) {
         auto& ks        = knobs_[i];
@@ -219,6 +286,36 @@ void ControlWindow::setPressureNorm(float norm) {
     }
 }
 
+void ControlWindow::setLifMidiStatus(bool enabled, int channel, int baseNote) {
+    if (!lifMidiStatusLabel_ || !lifMidiToggleBtn_) return;
+    char buf[96];
+    std::snprintf(buf, sizeof(buf), "LIF MIDI: %s (Ch %d, Notes %d-%d)",
+                  enabled ? "On" : "Off", channel, baseNote, baseNote + 15);
+    lifMidiStatusLabel_->setText(buf);
+    lifMidiStatusLabel_->getRenderer()->setTextColor(enabled ? tgui::Color(80, 255, 120) : TEXT_DIM);
+    lifMidiToggleBtn_->setText(enabled ? "Disable LIF MIDI (M)" : "Enable LIF MIDI (M)");
+}
+
+void ControlWindow::setMidiPortLists(const std::vector<std::string>& inPorts,
+                                     int inIdx,
+                                     const std::vector<std::string>& outPorts,
+                                     int outIdx) {
+    if (midiInPortBox_) {
+        midiInPortBox_->removeAllItems();
+        for (const auto& name : inPorts)
+            midiInPortBox_->addItem(name);
+        if (inIdx >= 0 && inIdx < static_cast<int>(inPorts.size()))
+            midiInPortBox_->setSelectedItemByIndex(static_cast<std::size_t>(inIdx));
+    }
+    if (midiOutPortBox_) {
+        midiOutPortBox_->removeAllItems();
+        for (const auto& name : outPorts)
+            midiOutPortBox_->addItem(name);
+        if (outIdx >= 0 && outIdx < static_cast<int>(outPorts.size()))
+            midiOutPortBox_->setSelectedItemByIndex(static_cast<std::size_t>(outIdx));
+    }
+}
+
 // ── Input handling ────────────────────────────────────────────────────────────────────
 void ControlWindow::onMousePressed(float x, float y) {
     for (int i = 0; i < NUM_KNOBS; ++i) {
@@ -300,6 +397,7 @@ void ControlWindow::update() {
     bool globalSceneXfadeNow = cRaw && shiftNow;
 
     bool pNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::P);
+    bool mNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::M);
     bool bNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::B);
     bool kNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K);
     bool minusNow = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Hyphen);
@@ -367,6 +465,12 @@ void ControlWindow::update() {
         if (onLIFToneToggle) onLIFToneToggle();
     }
     kKeyWas_ = kNow;
+
+    // M key: toggle LIF MIDI on/off.
+    if (mNow && !mKeyWas_) {
+        if (onLIFMidiToggle) onLIFMidiToggle();
+    }
+    mKeyWas_ = mNow;
 
     // Frequency range controls (edge-triggered).
     const float freqStep = rawShiftNow ? 80.0f : 20.0f;

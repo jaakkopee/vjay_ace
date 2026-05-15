@@ -1,5 +1,9 @@
 CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o: \
   /Users/jaakkop/Documents/koodii/vjay_ace/src/app/ControlWindow.cpp \
+  /opt/homebrew/opt/sfml/include/SFML/Window/Keyboard.hpp \
+  /opt/homebrew/opt/sfml/include/SFML/Window/Export.hpp \
+  /opt/homebrew/opt/sfml/include/SFML/Config.hpp \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/TargetConditionals.h \
   /Users/jaakkop/Documents/koodii/vjay_ace/src/app/ControlWindow.h \
   /Users/jaakkop/Documents/koodii/vjay_ace/src/app/Constants.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/array \
@@ -806,8 +810,6 @@ CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o: \
   /opt/homebrew/opt/sfml/include/SFML/Graphics.hpp \
   /opt/homebrew/opt/sfml/include/SFML/Graphics/BlendMode.hpp \
   /opt/homebrew/opt/sfml/include/SFML/Graphics/Export.hpp \
-  /opt/homebrew/opt/sfml/include/SFML/Config.hpp \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/TargetConditionals.h \
   /opt/homebrew/opt/sfml/include/SFML/Graphics/CircleShape.hpp \
   /opt/homebrew/opt/sfml/include/SFML/Graphics/Shape.hpp \
   /opt/homebrew/opt/sfml/include/SFML/Graphics/Color.hpp \
@@ -936,7 +938,6 @@ CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o: \
   /opt/homebrew/opt/sfml/include/SFML/Graphics/Glyph.hpp \
   /opt/homebrew/opt/sfml/include/SFML/Graphics/Texture.hpp \
   /opt/homebrew/opt/sfml/include/SFML/Window/GlResource.hpp \
-  /opt/homebrew/opt/sfml/include/SFML/Window/Export.hpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/filesystem \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/copy_options.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/directory_entry.h \
@@ -1088,7 +1089,6 @@ CMakeFiles/vjay_ace.dir/src/app/ControlWindow.cpp.o: \
   /opt/homebrew/opt/sfml/include/SFML/System/Utf.hpp \
   /opt/homebrew/opt/sfml/include/SFML/System/Utf.inl \
   /opt/homebrew/opt/sfml/include/SFML/System/String.inl \
-  /opt/homebrew/opt/sfml/include/SFML/Window/Keyboard.hpp \
   /opt/homebrew/opt/sfml/include/SFML/Window/Mouse.hpp \
   /opt/homebrew/opt/sfml/include/SFML/Window/Sensor.hpp \
   /opt/homebrew/opt/sfml/include/SFML/System/Vector3.hpp \

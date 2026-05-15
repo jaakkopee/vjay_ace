@@ -4,9 +4,75 @@
 
 MidiRouter::MidiRouter() {
     midiIn_ = std::make_unique<RtMidiIn>();
+    midiOut_ = std::make_unique<RtMidiOut>();
 }
 
-MidiRouter::~MidiRouter() { closePort(); }
+MidiRouter::~MidiRouter() { closePort(); closeOutputPort(); }
+std::vector<std::string> MidiRouter::outputPortNames() const {
+    std::vector<std::string> names;
+    unsigned int n = midiOut_->getPortCount();
+    for (unsigned int i = 0; i < n; ++i)
+        names.push_back(midiOut_->getPortName(i));
+    return names;
+}
+
+bool MidiRouter::openOutputPort(int index) {
+    closeOutputPort();
+    try {
+        midiOut_->openPort(static_cast<unsigned int>(index));
+        return true;
+    } catch (RtMidiError& e) {
+        std::cerr << "[MidiRouter] Output: " << e.getMessage() << "\n";
+        return false;
+    }
+}
+
+void MidiRouter::closeOutputPort() {
+    if (midiOut_->isPortOpen()) {
+        midiOut_->closePort();
+    }
+}
+
+bool MidiRouter::isOutputOpen() const { return midiOut_->isPortOpen(); }
+
+void MidiRouter::sendNoteOn(int channel, int note, int velocity) {
+    if (!isOutputOpen()) return;
+    std::vector<unsigned char> msg = {
+        static_cast<unsigned char>(0x90 | ((channel-1) & 0x0F)),
+        static_cast<unsigned char>(note & 0x7F),
+        static_cast<unsigned char>(velocity & 0x7F)
+    };
+    sendMessage(msg);
+}
+
+void MidiRouter::sendNoteOff(int channel, int note, int velocity) {
+    if (!isOutputOpen()) return;
+    std::vector<unsigned char> msg = {
+        static_cast<unsigned char>(0x80 | ((channel-1) & 0x0F)),
+        static_cast<unsigned char>(note & 0x7F),
+        static_cast<unsigned char>(velocity & 0x7F)
+    };
+    sendMessage(msg);
+}
+
+void MidiRouter::sendCC(int channel, int cc, int value) {
+    if (!isOutputOpen()) return;
+    std::vector<unsigned char> msg = {
+        static_cast<unsigned char>(0xB0 | ((channel-1) & 0x0F)),
+        static_cast<unsigned char>(cc & 0x7F),
+        static_cast<unsigned char>(value & 0x7F)
+    };
+    sendMessage(msg);
+}
+
+void MidiRouter::sendMessage(const std::vector<unsigned char>& msg) {
+    if (!isOutputOpen()) return;
+    try {
+        midiOut_->sendMessage(&msg);
+    } catch (RtMidiError& e) {
+        std::cerr << "[MidiRouter] Output send error: " << e.getMessage() << "\n";
+    }
+}
 
 std::vector<std::string> MidiRouter::portNames() const {
     std::vector<std::string> names;
