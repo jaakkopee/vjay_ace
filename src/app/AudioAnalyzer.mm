@@ -1,10 +1,13 @@
 #include "AudioAnalyzer.h"
-#import  <AVFoundation/AVFoundation.h>
+#include <AudioUnit/AudioUnit.h>
+#include <AudioToolbox/AudioToolbox.h>
 #include <Accelerate/Accelerate.h>
+#include <CoreAudio/CoreAudio.h>
 #include <cmath>
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <vector>
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -38,93 +41,307 @@ AudioAnalyzer::~AudioAnalyzer() {
     if (fftSetup_) vDSP_destroy_fftsetup(static_cast<FFTSetup>(fftSetup_));
 }
 
+// ── Core Audio device helpers ─────────────────────────────────────────────────
+
+static AudioDeviceID getAudioDeviceAtIndex(AudioObjectPropertyScope scope, int index) {
+    AudioObjectPropertyAddress propertyAddress = {
+        kAudioHardwarePropertyDevices,
+        scope,
+        kAudioObjectPropertyElementMain
+    };
+    
+    UInt32 dataSize = 0;
+    OSStatus status = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &dataSize);
+    if (status != noErr) return kAudioObjectUnknown;
+    
+    UInt32 deviceCount = dataSize / sizeof(AudioDeviceID);
+    if (index < 0 || index >= static_cast<int>(deviceCount)) return kAudioObjectUnknown;
+    
+    std::vector<AudioDeviceID> deviceIDs(deviceCount);
+    status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &dataSize, deviceIDs.data());
+    if (status != noErr) return kAudioObjectUnknown;
+    
+    return deviceIDs[index];
+}
+
+static std::string getDeviceName(AudioDeviceID deviceID) {
+    CFStringRef deviceNameRef = NULL;
+    AudioObjectPropertyAddress nameAddress = {
+        kAudioDevicePropertyDeviceNameCFString,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    UInt32 nameSize = sizeof(deviceNameRef);
+    
+    if (AudioObjectGetPropertyData(deviceID, &nameAddress, 0, NULL, &nameSize, &deviceNameRef) == noErr && deviceNameRef) {
+        const char* name = CFStringGetCStringPtr(deviceNameRef, kCFStringEncodingUTF8);
+        std::string result = name ? std::string(name) : "unknown";
+        CFRelease(deviceNameRef);
+        return result;
+    }
+    return "unknown";
+}
+
+// Render callback for input
+static OSStatus inputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags,
+                                     const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber,
+                                     UInt32 inNumberFrames, AudioBufferList* ioData) {
+    AudioAnalyzer* analyzer = static_cast<AudioAnalyzer*>(inRefCon);
+    AudioUnit inputUnit = static_cast<AudioUnit>(analyzer->inputUnit_);
+    
+    // Get the input buffer
+    AudioUnitRender(inputUnit, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
+    
+    // Process the first channel
+    if (ioData && ioData->mNumberBuffers > 0) {
+        float* buffer = static_cast<float*>(ioData->mBuffers[0].mData);
+        analyzer->processBlockPublic(buffer, inNumberFrames);
+    }
+    
+    return noErr;
+}
+
+// Render callback for output (passthrough)
+static OSStatus outputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags,
+                                      const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber,
+                                      UInt32 inNumberFrames, AudioBufferList* ioData) {
+    // For now, just return silence (passthrough is optional)
+    if (ioData && ioData->mNumberBuffers > 0) {
+        std::memset(ioData->mBuffers[0].mData, 0, ioData->mBuffers[0].mDataByteSize);
+    }
+    return noErr;
+}
+
 // ── Core Audio AUHAL setup ────────────────────────────────────────────────────
 
 bool AudioAnalyzer::start(int inputDeviceIndex, int outputDeviceIndex) {
     if (running_) return true;
 
-    // Note: AVAudioEngine uses the system default input/output devices.
-    // To use specific devices, we would need to use Core Audio AUHAL directly,
-    // which is significantly more complex. For now, we accept the parameters
-    // for future compatibility but use the system defaults.
-    // The output device can be influenced via AVAudioSession on iOS, but
-    // on macOS we're limited to system defaults for now.
-    (void)inputDeviceIndex;   // Unused for now
-    (void)outputDeviceIndex;   // Unused for now
+    selectedInputDeviceIndex_ = inputDeviceIndex;
+    selectedOutputDeviceIndex_ = outputDeviceIndex;
 
-    AVAudioEngine*    engine    = [[AVAudioEngine alloc] init];
-    AVAudioInputNode* inputNode = engine.inputNode;
-    AVAudioFormat*    fmt       = [inputNode outputFormatForBus:0];
-
-    sampleRate_ = static_cast<float>(fmt.sampleRate);
-
-    // Store engine – manual retain so it survives beyond ARC scope
-    auUnit_ = (__bridge_retained void*)engine;
-
-    // ── Player node for passthrough to system output device ──────────────────
-    // Direct inputNode→mainMixerNode connection is unreliable when the input
-    // and output are different hardware devices (e.g. built-in mic + headphones).
-    // Instead we feed captured buffers into an AVAudioPlayerNode.
-    AVAudioPlayerNode* player = [[AVAudioPlayerNode alloc] init];
-    [engine attachNode:player];
-    [engine connect:player to:engine.mainMixerNode format:fmt];
-    playerNode_ = (__bridge_retained void*)player;
-
-    // ── Tap: mix down to mono for FFT analysis + schedule buffer for playback ─
-    AudioAnalyzer* selfPtr = this;
-    [inputNode installTapOnBus:0
-                    bufferSize:FFT_SIZE
-                        format:fmt
-                         block:^(AVAudioPCMBuffer* buf, AVAudioTime* when) {
-        if (!buf.floatChannelData || buf.frameLength == 0) return;
-        UInt32 nFrames   = buf.frameLength;
-        UInt32 nChannels = buf.format.channelCount;
-        // Analysis: mix to mono
-        std::vector<float> mono(nFrames, 0.0f);
-        for (UInt32 c = 0; c < nChannels; ++c) {
-            const float* ch = buf.floatChannelData[c];
-            for (UInt32 f = 0; f < nFrames; ++f)
-                mono[f] += ch[f];
+    // Get input device
+    AudioDeviceID inputDevice = kAudioObjectUnknown;
+    if (inputDeviceIndex >= 0) {
+        inputDevice = getAudioDeviceAtIndex(kAudioDevicePropertyScopeInput, inputDeviceIndex);
+        if (inputDevice == kAudioObjectUnknown) {
+            std::cerr << "[Audio] Input device index " << inputDeviceIndex << " not found\n";
+            return false;
         }
-        float inv = 1.0f / static_cast<float>(nChannels);
-        for (float& s : mono) s *= inv;
-        selfPtr->processBlock(mono.data(), static_cast<int>(nFrames));
-        // Passthrough: schedule the original buffer on the player node
-        AVAudioPlayerNode* p = (__bridge AVAudioPlayerNode*)selfPtr->playerNode_;
-        [p scheduleBuffer:buf completionHandler:nil];
-    }];
+        std::cout << "[Audio] Using input device: " << getDeviceName(inputDevice) << "\n";
+    } else {
+        // Use default input
+        AudioObjectPropertyAddress address = {
+            kAudioHardwarePropertyDefaultInputDevice,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMain
+        };
+        UInt32 size = sizeof(AudioDeviceID);
+        if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, NULL, &size, &inputDevice) != noErr) {
+            std::cerr << "[Audio] Could not get default input device\n";
+            return false;
+        }
+        std::cout << "[Audio] Using default input device: " << getDeviceName(inputDevice) << "\n";
+    }
 
-    NSError* err = nil;
-    if (![engine startAndReturnError:&err]) {
-        std::cerr << "[Audio] AVAudioEngine start failed: "
-                  << (err ? err.localizedDescription.UTF8String : "unknown") << "\n";
-        AVAudioEngine* e = (__bridge_transfer AVAudioEngine*)auUnit_;
-        (void)e;
-        auUnit_ = nullptr;
+    // Get output device
+    AudioDeviceID outputDevice = kAudioObjectUnknown;
+    if (outputDeviceIndex >= 0) {
+        outputDevice = getAudioDeviceAtIndex(kAudioDevicePropertyScopeOutput, outputDeviceIndex);
+        if (outputDevice == kAudioObjectUnknown) {
+            std::cerr << "[Audio] Output device index " << outputDeviceIndex << " not found\n";
+            return false;
+        }
+        std::cout << "[Audio] Using output device: " << getDeviceName(outputDevice) << "\n";
+    } else {
+        // Use default output
+        AudioObjectPropertyAddress address = {
+            kAudioHardwarePropertyDefaultOutputDevice,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMain
+        };
+        UInt32 size = sizeof(AudioDeviceID);
+        if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, NULL, &size, &outputDevice) != noErr) {
+            std::cerr << "[Audio] Could not get default output device\n";
+            return false;
+        }
+        std::cout << "[Audio] Using default output device: " << getDeviceName(outputDevice) << "\n";
+    }
+
+    // Create input unit
+    AudioComponentDescription inputDesc{};
+    inputDesc.componentType = kAudioUnitType_Output;
+    inputDesc.componentSubType = kAudioUnitSubType_HALOutput;
+    inputDesc.componentManufacturer = kAudioUnitManufacturer_Apple;
+    
+    AudioComponent inputComp = AudioComponentFindNext(NULL, &inputDesc);
+    if (!inputComp) {
+        std::cerr << "[Audio] Could not find HAL input component\n";
+        return false;
+    }
+    
+    AudioUnit inputUnit;
+    if (AudioComponentInstanceNew(inputComp, &inputUnit) != noErr) {
+        std::cerr << "[Audio] Could not create input unit\n";
+        return false;
+    }
+    inputUnit_ = inputUnit;
+
+    // Set input device
+    if (AudioUnitSetProperty(inputUnit, kAudioOutputUnitProperty_CurrentDevice,
+                              kAudioUnitScope_Global, 0, &inputDevice, sizeof(AudioDeviceID)) != noErr) {
+        std::cerr << "[Audio] Could not set input device\n";
+        AudioComponentInstanceDispose(inputUnit);
+        inputUnit_ = nullptr;
+        return false;
+    }
+
+    // Get format from input device
+    AudioStreamBasicDescription asbd{};
+    UInt32 size = sizeof(asbd);
+    if (AudioUnitGetProperty(inputUnit, kAudioUnitProperty_StreamFormat,
+                              kAudioUnitScope_Output, 0, &asbd, &size) != noErr) {
+        std::cerr << "[Audio] Could not get input stream format\n";
+        AudioComponentInstanceDispose(inputUnit);
+        inputUnit_ = nullptr;
+        return false;
+    }
+    
+    sampleRate_ = asbd.mSampleRate;
+    
+    // Set up input callback
+    AURenderCallbackStruct inputCallback{};
+    inputCallback.inputProc = inputRenderCallback;
+    inputCallback.inputProcRefCon = this;
+    
+    if (AudioUnitSetProperty(inputUnit, kAudioOutputUnitProperty_SetInputCallback,
+                              kAudioUnitScope_Global, 0, &inputCallback, sizeof(inputCallback)) != noErr) {
+        std::cerr << "[Audio] Could not set input callback\n";
+        AudioComponentInstanceDispose(inputUnit);
+        inputUnit_ = nullptr;
+        return false;
+    }
+
+    // Initialize input unit
+    if (AudioUnitInitialize(inputUnit) != noErr) {
+        std::cerr << "[Audio] Could not initialize input unit\n";
+        AudioComponentInstanceDispose(inputUnit);
+        inputUnit_ = nullptr;
+        return false;
+    }
+
+    // Create output unit
+    AudioComponentDescription outputDesc{};
+    outputDesc.componentType = kAudioUnitType_Output;
+    outputDesc.componentSubType = kAudioUnitSubType_HALOutput;
+    outputDesc.componentManufacturer = kAudioUnitManufacturer_Apple;
+    
+    AudioComponent outputComp = AudioComponentFindNext(NULL, &outputDesc);
+    if (!outputComp) {
+        std::cerr << "[Audio] Could not find HAL output component\n";
+        AudioUnitUninitialize(inputUnit);
+        AudioComponentInstanceDispose(inputUnit);
+        inputUnit_ = nullptr;
+        return false;
+    }
+    
+    AudioUnit outputUnit;
+    if (AudioComponentInstanceNew(outputComp, &outputUnit) != noErr) {
+        std::cerr << "[Audio] Could not create output unit\n";
+        AudioUnitUninitialize(inputUnit);
+        AudioComponentInstanceDispose(inputUnit);
+        inputUnit_ = nullptr;
+        return false;
+    }
+    outputUnit_ = outputUnit;
+
+    // Set output device
+    if (AudioUnitSetProperty(outputUnit, kAudioOutputUnitProperty_CurrentDevice,
+                              kAudioUnitScope_Global, 0, &outputDevice, sizeof(AudioDeviceID)) != noErr) {
+        std::cerr << "[Audio] Could not set output device\n";
+        AudioUnitUninitialize(inputUnit);
+        AudioComponentInstanceDispose(inputUnit);
+        AudioComponentInstanceDispose(outputUnit);
+        inputUnit_ = nullptr;
+        outputUnit_ = nullptr;
+        return false;
+    }
+
+    // Set output callback
+    AURenderCallbackStruct outputCallback{};
+    outputCallback.inputProc = outputRenderCallback;
+    outputCallback.inputProcRefCon = this;
+    
+    if (AudioUnitSetProperty(outputUnit, kAudioUnitProperty_SetRenderCallback,
+                              kAudioUnitScope_Input, 0, &outputCallback, sizeof(outputCallback)) != noErr) {
+        std::cerr << "[Audio] Could not set output callback\n";
+        AudioUnitUninitialize(inputUnit);
+        AudioComponentInstanceDispose(inputUnit);
+        AudioComponentInstanceDispose(outputUnit);
+        inputUnit_ = nullptr;
+        outputUnit_ = nullptr;
+        return false;
+    }
+
+    // Initialize output unit
+    if (AudioUnitInitialize(outputUnit) != noErr) {
+        std::cerr << "[Audio] Could not initialize output unit\n";
+        AudioUnitUninitialize(inputUnit);
+        AudioComponentInstanceDispose(inputUnit);
+        AudioComponentInstanceDispose(outputUnit);
+        inputUnit_ = nullptr;
+        outputUnit_ = nullptr;
+        return false;
+    }
+
+    // Start both units
+    if (AudioOutputUnitStart(inputUnit) != noErr) {
+        std::cerr << "[Audio] Could not start input unit\n";
+        AudioUnitUninitialize(inputUnit);
+        AudioUnitUninitialize(outputUnit);
+        AudioComponentInstanceDispose(inputUnit);
+        AudioComponentInstanceDispose(outputUnit);
+        inputUnit_ = nullptr;
+        outputUnit_ = nullptr;
+        return false;
+    }
+
+    if (AudioOutputUnitStart(outputUnit) != noErr) {
+        std::cerr << "[Audio] Could not start output unit\n";
+        AudioOutputUnitStop(inputUnit);
+        AudioUnitUninitialize(inputUnit);
+        AudioUnitUninitialize(outputUnit);
+        AudioComponentInstanceDispose(inputUnit);
+        AudioComponentInstanceDispose(outputUnit);
+        inputUnit_ = nullptr;
+        outputUnit_ = nullptr;
         return false;
     }
 
     running_ = true;
-    [player play];
     std::cout << "[Audio] Capture + passthrough started ("
-              << static_cast<int>(sampleRate_) << " Hz, "
-              << fmt.channelCount << "ch)\n";
+              << static_cast<int>(sampleRate_) << " Hz)\n";
     return true;
 }
 
 void AudioAnalyzer::stop() {
     if (!running_) return;
     running_ = false;
-    if (playerNode_) {
-        AVAudioPlayerNode* player = (__bridge_transfer AVAudioPlayerNode*)playerNode_;
-        playerNode_ = nullptr;
-        [player stop];
+    
+    if (inputUnit_) {
+        AudioUnit inputUnit = static_cast<AudioUnit>(inputUnit_);
+        AudioOutputUnitStop(inputUnit);
+        AudioUnitUninitialize(inputUnit);
+        AudioComponentInstanceDispose(inputUnit);
+        inputUnit_ = nullptr;
     }
-    if (auUnit_) {
-        AVAudioEngine* engine = (__bridge_transfer AVAudioEngine*)auUnit_;
-        auUnit_ = nullptr;
-        [engine.inputNode removeTapOnBus:0];
-        [engine stop];
+    
+    if (outputUnit_) {
+        AudioUnit outputUnit = static_cast<AudioUnit>(outputUnit_);
+        AudioOutputUnitStop(outputUnit);
+        AudioUnitUninitialize(outputUnit);
+        AudioComponentInstanceDispose(outputUnit);
+        outputUnit_ = nullptr;
     }
 }
 
