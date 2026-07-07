@@ -283,7 +283,7 @@ void ControlWindow::buildGui(int width, int /*height*/) {
 
     // ── Audio level meter canvas ──────────────────────────────────────────────
     // Placed below the knob grid, spanning the left panel.
-    const int meterY = 112 + KNOB_SIZE + 90 + KNOB_SIZE + 70;  // below row-1 value labels
+    const int meterY = 112 + KNOB_SIZE + 90 + KNOB_SIZE - 20;  // below row-1 value labels
     const int meterH = 80;
 
     auto meterLabel = tgui::Label::create("AUDIO");
