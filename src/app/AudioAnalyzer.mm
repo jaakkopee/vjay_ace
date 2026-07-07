@@ -44,9 +44,10 @@ AudioAnalyzer::~AudioAnalyzer() {
 // ── Core Audio device helpers ─────────────────────────────────────────────────
 
 static AudioDeviceID getAudioDeviceAtIndex(AudioObjectPropertyScope scope, int index) {
+    // Query ALL devices first
     AudioObjectPropertyAddress propertyAddress = {
         kAudioHardwarePropertyDevices,
-        scope,
+        kAudioObjectPropertyScopeGlobal,  // Use global scope to get all devices
         kAudioObjectPropertyElementMain
     };
     
@@ -55,13 +56,30 @@ static AudioDeviceID getAudioDeviceAtIndex(AudioObjectPropertyScope scope, int i
     if (status != noErr) return kAudioObjectUnknown;
     
     UInt32 deviceCount = dataSize / sizeof(AudioDeviceID);
-    if (index < 0 || index >= static_cast<int>(deviceCount)) return kAudioObjectUnknown;
-    
-    std::vector<AudioDeviceID> deviceIDs(deviceCount);
-    status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &dataSize, deviceIDs.data());
+    std::vector<AudioDeviceID> allDeviceIDs(deviceCount);
+    status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &dataSize, allDeviceIDs.data());
     if (status != noErr) return kAudioObjectUnknown;
     
-    return deviceIDs[index];
+    // Filter by input/output capability
+    std::vector<AudioDeviceID> filteredDevices;
+    for (AudioDeviceID deviceID : allDeviceIDs) {
+        // Check if device has the desired channels (input or output)
+        AudioObjectPropertyAddress channelsAddress = {
+            kAudioDevicePropertyStreams,
+            scope,
+            kAudioObjectPropertyElementMain
+        };
+        UInt32 channelsSize = 0;
+        if (AudioObjectGetPropertyDataSize(deviceID, &channelsAddress, 0, NULL, &channelsSize) == noErr && channelsSize > 0) {
+            filteredDevices.push_back(deviceID);
+        }
+    }
+    
+    if (index < 0 || index >= static_cast<int>(filteredDevices.size())) {
+        return kAudioObjectUnknown;
+    }
+    
+    return filteredDevices[index];
 }
 
 static std::string getDeviceName(AudioDeviceID deviceID) {
@@ -82,36 +100,6 @@ static std::string getDeviceName(AudioDeviceID deviceID) {
     return "unknown";
 }
 
-// Render callback for input
-static OSStatus inputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags,
-                                     const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber,
-                                     UInt32 inNumberFrames, AudioBufferList* ioData) {
-    AudioAnalyzer* analyzer = static_cast<AudioAnalyzer*>(inRefCon);
-    AudioUnit inputUnit = static_cast<AudioUnit>(analyzer->inputUnit_);
-    
-    // Get the input buffer
-    AudioUnitRender(inputUnit, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
-    
-    // Process the first channel
-    if (ioData && ioData->mNumberBuffers > 0) {
-        float* buffer = static_cast<float*>(ioData->mBuffers[0].mData);
-        analyzer->processBlockPublic(buffer, inNumberFrames);
-    }
-    
-    return noErr;
-}
-
-// Render callback for output (passthrough)
-static OSStatus outputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags,
-                                      const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber,
-                                      UInt32 inNumberFrames, AudioBufferList* ioData) {
-    // For now, just return silence (passthrough is optional)
-    if (ioData && ioData->mNumberBuffers > 0) {
-        std::memset(ioData->mBuffers[0].mData, 0, ioData->mBuffers[0].mDataByteSize);
-    }
-    return noErr;
-}
-
 // ── Core Audio AUHAL setup ────────────────────────────────────────────────────
 
 bool AudioAnalyzer::start(int inputDeviceIndex, int outputDeviceIndex) {
@@ -128,7 +116,7 @@ bool AudioAnalyzer::start(int inputDeviceIndex, int outputDeviceIndex) {
             std::cerr << "[Audio] Input device index " << inputDeviceIndex << " not found\n";
             return false;
         }
-        std::cout << "[Audio] Using input device: " << getDeviceName(inputDevice) << "\n";
+        std::cout << "[Audio] Using input device [" << inputDeviceIndex << "]: " << getDeviceName(inputDevice) << "\n";
     } else {
         // Use default input
         AudioObjectPropertyAddress address = {
@@ -187,20 +175,32 @@ bool AudioAnalyzer::start(int inputDeviceIndex, int outputDeviceIndex) {
     }
     inputUnit_ = inputUnit;
 
-    // Set input device
-    if (AudioUnitSetProperty(inputUnit, kAudioOutputUnitProperty_CurrentDevice,
-                              kAudioUnitScope_Global, 0, &inputDevice, sizeof(AudioDeviceID)) != noErr) {
-        std::cerr << "[Audio] Could not set input device\n";
+    // Enable output I/O on the output element (bus 0) - required for AudioUnitRender to work
+    UInt32 enableOutput = 1;
+    if (AudioUnitSetProperty(inputUnit, kAudioOutputUnitProperty_EnableIO,
+                              kAudioUnitScope_Output, 0, &enableOutput, sizeof(enableOutput)) != noErr) {
+        std::cerr << "[Audio] Could not enable output I/O\n";
         AudioComponentInstanceDispose(inputUnit);
         inputUnit_ = nullptr;
         return false;
     }
 
-    // Get format from input device
+    // Enable input I/O on the input element (bus 1)
+    UInt32 enableInput = 1;
+    OSStatus status = AudioUnitSetProperty(inputUnit, kAudioOutputUnitProperty_EnableIO,
+                              kAudioUnitScope_Input, 1, &enableInput, sizeof(enableInput));
+    if (status != noErr) {
+        std::cerr << "[Audio] Could not enable input I/O (status=" << status << ")\n";
+        AudioComponentInstanceDispose(inputUnit);
+        inputUnit_ = nullptr;
+        return false;
+    }
+
+    // Get format from input device  
     AudioStreamBasicDescription asbd{};
     UInt32 size = sizeof(asbd);
     if (AudioUnitGetProperty(inputUnit, kAudioUnitProperty_StreamFormat,
-                              kAudioUnitScope_Output, 0, &asbd, &size) != noErr) {
+                              kAudioUnitScope_Output, 1, &asbd, &size) != noErr) {
         std::cerr << "[Audio] Could not get input stream format\n";
         AudioComponentInstanceDispose(inputUnit);
         inputUnit_ = nullptr;
@@ -209,20 +209,16 @@ bool AudioAnalyzer::start(int inputDeviceIndex, int outputDeviceIndex) {
     
     sampleRate_ = asbd.mSampleRate;
     
-    // Set up input callback
-    AURenderCallbackStruct inputCallback{};
-    inputCallback.inputProc = inputRenderCallback;
-    inputCallback.inputProcRefCon = this;
-    
-    if (AudioUnitSetProperty(inputUnit, kAudioOutputUnitProperty_SetInputCallback,
-                              kAudioUnitScope_Global, 0, &inputCallback, sizeof(inputCallback)) != noErr) {
-        std::cerr << "[Audio] Could not set input callback\n";
+    // Set the output bus format to match the input (required for AudioUnitRender to work)
+    if (AudioUnitSetProperty(inputUnit, kAudioUnitProperty_StreamFormat,
+                              kAudioUnitScope_Input, 0, &asbd, sizeof(asbd)) != noErr) {
+        std::cerr << "[Audio] Could not set output stream format\n";
         AudioComponentInstanceDispose(inputUnit);
         inputUnit_ = nullptr;
         return false;
     }
-
-    // Initialize input unit
+    
+    // Initialize input unit (no callback, we'll use a thread to pull data)
     if (AudioUnitInitialize(inputUnit) != noErr) {
         std::cerr << "[Audio] Could not initialize input unit\n";
         AudioComponentInstanceDispose(inputUnit);
@@ -230,103 +226,32 @@ bool AudioAnalyzer::start(int inputDeviceIndex, int outputDeviceIndex) {
         return false;
     }
 
-    // Create output unit
-    AudioComponentDescription outputDesc{};
-    outputDesc.componentType = kAudioUnitType_Output;
-    outputDesc.componentSubType = kAudioUnitSubType_HALOutput;
-    outputDesc.componentManufacturer = kAudioUnitManufacturer_Apple;
-    
-    AudioComponent outputComp = AudioComponentFindNext(NULL, &outputDesc);
-    if (!outputComp) {
-        std::cerr << "[Audio] Could not find HAL output component\n";
-        AudioUnitUninitialize(inputUnit);
-        AudioComponentInstanceDispose(inputUnit);
-        inputUnit_ = nullptr;
-        return false;
-    }
-    
-    AudioUnit outputUnit;
-    if (AudioComponentInstanceNew(outputComp, &outputUnit) != noErr) {
-        std::cerr << "[Audio] Could not create output unit\n";
-        AudioUnitUninitialize(inputUnit);
-        AudioComponentInstanceDispose(inputUnit);
-        inputUnit_ = nullptr;
-        return false;
-    }
-    outputUnit_ = outputUnit;
-
-    // Set output device
-    if (AudioUnitSetProperty(outputUnit, kAudioOutputUnitProperty_CurrentDevice,
-                              kAudioUnitScope_Global, 0, &outputDevice, sizeof(AudioDeviceID)) != noErr) {
-        std::cerr << "[Audio] Could not set output device\n";
-        AudioUnitUninitialize(inputUnit);
-        AudioComponentInstanceDispose(inputUnit);
-        AudioComponentInstanceDispose(outputUnit);
-        inputUnit_ = nullptr;
-        outputUnit_ = nullptr;
-        return false;
-    }
-
-    // Set output callback
-    AURenderCallbackStruct outputCallback{};
-    outputCallback.inputProc = outputRenderCallback;
-    outputCallback.inputProcRefCon = this;
-    
-    if (AudioUnitSetProperty(outputUnit, kAudioUnitProperty_SetRenderCallback,
-                              kAudioUnitScope_Input, 0, &outputCallback, sizeof(outputCallback)) != noErr) {
-        std::cerr << "[Audio] Could not set output callback\n";
-        AudioUnitUninitialize(inputUnit);
-        AudioComponentInstanceDispose(inputUnit);
-        AudioComponentInstanceDispose(outputUnit);
-        inputUnit_ = nullptr;
-        outputUnit_ = nullptr;
-        return false;
-    }
-
-    // Initialize output unit
-    if (AudioUnitInitialize(outputUnit) != noErr) {
-        std::cerr << "[Audio] Could not initialize output unit\n";
-        AudioUnitUninitialize(inputUnit);
-        AudioComponentInstanceDispose(inputUnit);
-        AudioComponentInstanceDispose(outputUnit);
-        inputUnit_ = nullptr;
-        outputUnit_ = nullptr;
-        return false;
-    }
-
-    // Start both units
+    // Start input unit
     if (AudioOutputUnitStart(inputUnit) != noErr) {
         std::cerr << "[Audio] Could not start input unit\n";
         AudioUnitUninitialize(inputUnit);
-        AudioUnitUninitialize(outputUnit);
         AudioComponentInstanceDispose(inputUnit);
-        AudioComponentInstanceDispose(outputUnit);
         inputUnit_ = nullptr;
-        outputUnit_ = nullptr;
-        return false;
-    }
-
-    if (AudioOutputUnitStart(outputUnit) != noErr) {
-        std::cerr << "[Audio] Could not start output unit\n";
-        AudioOutputUnitStop(inputUnit);
-        AudioUnitUninitialize(inputUnit);
-        AudioUnitUninitialize(outputUnit);
-        AudioComponentInstanceDispose(inputUnit);
-        AudioComponentInstanceDispose(outputUnit);
-        inputUnit_ = nullptr;
-        outputUnit_ = nullptr;
         return false;
     }
 
     running_ = true;
-    std::cout << "[Audio] Capture + passthrough started ("
-              << static_cast<int>(sampleRate_) << " Hz)\n";
+    
+    // Start the audio processing thread
+    processingThread_ = std::thread(&AudioAnalyzer::audioProcessingThreadRun, this);
+    
+    std::cout << "[Audio] Capture started (" << static_cast<int>(sampleRate_) << " Hz)\n";
     return true;
 }
 
 void AudioAnalyzer::stop() {
     if (!running_) return;
     running_ = false;
+    
+    // Wait for processing thread to finish
+    if (processingThread_.joinable()) {
+        processingThread_.join();
+    }
     
     if (inputUnit_) {
         AudioUnit inputUnit = static_cast<AudioUnit>(inputUnit_);
@@ -335,14 +260,45 @@ void AudioAnalyzer::stop() {
         AudioComponentInstanceDispose(inputUnit);
         inputUnit_ = nullptr;
     }
+}
+
+// ── Audio Processing Thread ──────────────────────────────────────────────────
+
+void AudioAnalyzer::audioProcessingThreadRun() {
+    // Allocate buffer for pulling audio data
+    const int bufferSize = 4096;
+    float* audioData = new float[bufferSize]{};
     
-    if (outputUnit_) {
-        AudioUnit outputUnit = static_cast<AudioUnit>(outputUnit_);
-        AudioOutputUnitStop(outputUnit);
-        AudioUnitUninitialize(outputUnit);
-        AudioComponentInstanceDispose(outputUnit);
-        outputUnit_ = nullptr;
+    AudioBufferList bufferList;
+    bufferList.mNumberBuffers = 1;
+    bufferList.mBuffers[0].mNumberChannels = 1;
+    bufferList.mBuffers[0].mDataByteSize = bufferSize * sizeof(float);
+    bufferList.mBuffers[0].mData = audioData;
+    
+    std::cout << "[Audio] Processing thread started\n";
+    
+    while (running_) {
+        // Pull audio data from the HAL input unit
+        AudioUnit inputUnit = static_cast<AudioUnit>(inputUnit_);
+        AudioTimeStamp timeStamp{};
+        AudioUnitRenderActionFlags flags = 0;
+        
+        // AudioUnitRender on input bus (bus 1) to get captured data
+        OSStatus status = AudioUnitRender(inputUnit, &flags, &timeStamp, 1, bufferSize, &bufferList);
+        if (status == noErr && bufferList.mNumberBuffers > 0) {
+            float* buffer = static_cast<float*>(bufferList.mBuffers[0].mData);
+            processBlock(buffer, bufferSize);
+        } else if (status != noErr && status != -10874) {  // -10874 is expected initially
+            std::cerr << "[Audio] AudioUnitRender failed: " << status << "\n";
+            break;
+        }
+        
+        // Small sleep to prevent excessive CPU usage
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    
+    delete[] audioData;
+    std::cout << "[Audio] Processing thread stopped\n";
 }
 
 // ── DSP (called from audio thread) ───────────────────────────────────────────
