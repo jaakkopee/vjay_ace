@@ -444,25 +444,39 @@ bool App::init() {
     // ── MIDI ─────────────────────────────────────────────────────────────
     auto ports = midi_.portNames();
     int selectedInPort = -1;
-    if (!ports.empty()) {
+    
+    // Use explicitly set device if provided, otherwise auto-select
+    if (midiInDeviceIndex_ >= 0 && midiInDeviceIndex_ < static_cast<int>(ports.size())) {
+        selectedInPort = midiInDeviceIndex_;
+    } else if (!ports.empty()) {
         selectedInPort = findPortIndexByNameContains(ports, "MPD218");
         if (selectedInPort < 0) selectedInPort = 0;
-        if (midi_.openPort(selectedInPort))
-            std::cout << "[App] MIDI IN opened: " << ports[selectedInPort] << "\n";
-    } else {
-        std::cout << "[App] No MIDI IN ports found\n";
     }
+    
+    if (selectedInPort >= 0 && midi_.openPort(selectedInPort))
+        std::cout << "[App] MIDI IN opened: " << ports[selectedInPort] << "\n";
+    else if (!ports.empty())
+        std::cout << "[App] MIDI IN failed to open on port " << selectedInPort << "\n";
+    else
+        std::cout << "[App] No MIDI IN ports found\n";
 
     auto outPorts = midi_.outputPortNames();
     int selectedOutPort = -1;
-    if (!outPorts.empty()) {
+    
+    // Use explicitly set device if provided, otherwise auto-select
+    if (midiOutDeviceIndex_ >= 0 && midiOutDeviceIndex_ < static_cast<int>(outPorts.size())) {
+        selectedOutPort = midiOutDeviceIndex_;
+    } else if (!outPorts.empty()) {
         selectedOutPort = findPortIndexByNameContains(outPorts, "IAC Driver");
         if (selectedOutPort < 0) selectedOutPort = 0;
-        if (midi_.openOutputPort(selectedOutPort))
-            std::cout << "[App] MIDI OUT opened: " << outPorts[selectedOutPort] << "\n";
-    } else {
-        std::cout << "[App] No MIDI OUT ports found\n";
     }
+    
+    if (selectedOutPort >= 0 && midi_.openOutputPort(selectedOutPort))
+        std::cout << "[App] MIDI OUT opened: " << outPorts[selectedOutPort] << "\n";
+    else if (!outPorts.empty())
+        std::cout << "[App] MIDI OUT failed to open on port " << selectedOutPort << "\n";
+    else
+        std::cout << "[App] No MIDI OUT ports found\n";
 
     // Optional startup self-test for outbound MIDI path.
     // Enable with: VJAY_TEST_MIDI_OUT=1 ./vjay_ace
@@ -494,7 +508,7 @@ bool App::init() {
     };
 
     // ── Audio capture ─────────────────────────────────────────────────
-    if (!audio_.start())
+    if (!audio_.start(audioInDeviceIndex_, audioOutDeviceIndex_))
         std::cerr << "[App] Audio capture unavailable (no mic/line-in?)\n";
 
     if (!lifToneSynth_.startStream())

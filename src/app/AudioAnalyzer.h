@@ -30,7 +30,9 @@ public:
     ~AudioAnalyzer();
 
     // Start / stop audio capture.
-    bool start();
+    // inputDeviceIndex: audio input device (-1 = default)
+    // outputDeviceIndex: audio output device (-1 = default)
+    bool start(int inputDeviceIndex = -1, int outputDeviceIndex = -1);
     void stop();
     bool isRunning() const { return running_; }
 

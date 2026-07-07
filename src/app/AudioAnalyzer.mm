@@ -40,8 +40,17 @@ AudioAnalyzer::~AudioAnalyzer() {
 
 // ── Core Audio AUHAL setup ────────────────────────────────────────────────────
 
-bool AudioAnalyzer::start() {
+bool AudioAnalyzer::start(int inputDeviceIndex, int outputDeviceIndex) {
     if (running_) return true;
+
+    // Note: AVAudioEngine uses the system default input/output devices.
+    // To use specific devices, we would need to use Core Audio AUHAL directly,
+    // which is significantly more complex. For now, we accept the parameters
+    // for future compatibility but use the system defaults.
+    // The output device can be influenced via AVAudioSession on iOS, but
+    // on macOS we're limited to system defaults for now.
+    (void)inputDeviceIndex;   // Unused for now
+    (void)outputDeviceIndex;   // Unused for now
 
     AVAudioEngine*    engine    = [[AVAudioEngine alloc] init];
     AVAudioInputNode* inputNode = engine.inputNode;

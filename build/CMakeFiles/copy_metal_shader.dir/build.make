@@ -53,10 +53,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/jaakkop/Documents/koodii/vjay_ace
+CMAKE_SOURCE_DIR = "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace"
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/jaakkop/Documents/koodii/vjay_ace/build
+CMAKE_BINARY_DIR = "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build"
 
 # Utility rule file for copy_metal_shader.
 
@@ -68,9 +68,9 @@ include CMakeFiles/copy_metal_shader.dir/progress.make
 
 CMakeFiles/copy_metal_shader: vjay_shaders.metal
 
-vjay_shaders.metal: /Users/jaakkop/Documents/koodii/vjay_ace/src/app/shaders/vjay_shaders.metal
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Copying vjay_shaders.metal to build dir"
-	/opt/homebrew/bin/cmake -E copy /Users/jaakkop/Documents/koodii/vjay_ace/src/app/shaders/vjay_shaders.metal /Users/jaakkop/Documents/koodii/vjay_ace/build/vjay_shaders.metal
+vjay_shaders.metal: /Users/jaakkop/Documents/Dokumentit\ –\ Jaakko\ -\ Mac\ mini/koodii/vjay_ace/src/app/shaders/vjay_shaders.metal
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir="/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_1) "Copying vjay_shaders.metal to build dir"
+	/opt/homebrew/bin/cmake -E copy /Users/jaakkop/Documents/Dokumentit\ –\ Jaakko\ -\ Mac\ mini/koodii/vjay_ace/src/app/shaders/vjay_shaders.metal /Users/jaakkop/Documents/Dokumentit\ –\ Jaakko\ -\ Mac\ mini/koodii/vjay_ace/build/vjay_shaders.metal
 
 CMakeFiles/copy_metal_shader.dir/codegen:
 .PHONY : CMakeFiles/copy_metal_shader.dir/codegen
@@ -89,6 +89,6 @@ CMakeFiles/copy_metal_shader.dir/clean:
 .PHONY : CMakeFiles/copy_metal_shader.dir/clean
 
 CMakeFiles/copy_metal_shader.dir/depend:
-	cd /Users/jaakkop/Documents/koodii/vjay_ace/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/jaakkop/Documents/koodii/vjay_ace /Users/jaakkop/Documents/koodii/vjay_ace /Users/jaakkop/Documents/koodii/vjay_ace/build /Users/jaakkop/Documents/koodii/vjay_ace/build /Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles/copy_metal_shader.dir/DependInfo.cmake "--color=$(COLOR)" copy_metal_shader
+	cd "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build" && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build/CMakeFiles/copy_metal_shader.dir/DependInfo.cmake" "--color=$(COLOR)" copy_metal_shader
 .PHONY : CMakeFiles/copy_metal_shader.dir/depend
 

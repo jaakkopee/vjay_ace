@@ -53,10 +53,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/jaakkop/Documents/koodii/vjay_ace
+CMAKE_SOURCE_DIR = "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace"
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/jaakkop/Documents/koodii/vjay_ace/build
+CMAKE_BINARY_DIR = "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build"
 
 # Include any dependencies generated for this target.
 include CMakeFiles/midi_monitor.dir/depend.make
@@ -73,32 +73,32 @@ CMakeFiles/midi_monitor.dir/codegen:
 .PHONY : CMakeFiles/midi_monitor.dir/codegen
 
 CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o: CMakeFiles/midi_monitor.dir/flags.make
-CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o: /Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/main.cpp
+CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o: /Users/jaakkop/Documents/Dokumentit\ –\ Jaakko\ -\ Mac\ mini/koodii/vjay_ace/src/midi_monitor/main.cpp
 CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o: CMakeFiles/midi_monitor.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o -MF CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o.d -o CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o -c /Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/main.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o -MF CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o.d -o CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o -c "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/src/midi_monitor/main.cpp"
 
 CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/main.cpp > CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/src/midi_monitor/main.cpp" > CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.i
 
 CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/main.cpp -o CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/src/midi_monitor/main.cpp" -o CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.s
 
 CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o: CMakeFiles/midi_monitor.dir/flags.make
-CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o: /Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp
+CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o: /Users/jaakkop/Documents/Dokumentit\ –\ Jaakko\ -\ Mac\ mini/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp
 CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o: CMakeFiles/midi_monitor.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o -MF CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o.d -o CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o -c /Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o -MF CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o.d -o CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o -c "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp"
 
 CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp > CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp" > CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.i
 
 CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp -o CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp" -o CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.s
 
 # Object files for target midi_monitor
 midi_monitor_OBJECTS = \
@@ -111,12 +111,12 @@ midi_monitor_EXTERNAL_OBJECTS =
 midi_monitor: CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o
 midi_monitor: CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o
 midi_monitor: CMakeFiles/midi_monitor.dir/build.make
-midi_monitor: /opt/homebrew/opt/tgui/lib/libtgui.1.12.0.dylib
+midi_monitor: /opt/homebrew/opt/tgui/lib/libtgui.1.13.0.dylib
 midi_monitor: /opt/homebrew/opt/sfml/lib/libsfml-graphics.3.0.2.dylib
 midi_monitor: /opt/homebrew/opt/sfml/lib/libsfml-window.3.0.2.dylib
 midi_monitor: /opt/homebrew/opt/sfml/lib/libsfml-system.3.0.2.dylib
 midi_monitor: CMakeFiles/midi_monitor.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable midi_monitor"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable midi_monitor"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/midi_monitor.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -128,6 +128,6 @@ CMakeFiles/midi_monitor.dir/clean:
 .PHONY : CMakeFiles/midi_monitor.dir/clean
 
 CMakeFiles/midi_monitor.dir/depend:
-	cd /Users/jaakkop/Documents/koodii/vjay_ace/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/jaakkop/Documents/koodii/vjay_ace /Users/jaakkop/Documents/koodii/vjay_ace /Users/jaakkop/Documents/koodii/vjay_ace/build /Users/jaakkop/Documents/koodii/vjay_ace/build /Users/jaakkop/Documents/koodii/vjay_ace/build/CMakeFiles/midi_monitor.dir/DependInfo.cmake "--color=$(COLOR)" midi_monitor
+	cd "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build" && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build" "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/build/CMakeFiles/midi_monitor.dir/DependInfo.cmake" "--color=$(COLOR)" midi_monitor
 .PHONY : CMakeFiles/midi_monitor.dir/depend
 

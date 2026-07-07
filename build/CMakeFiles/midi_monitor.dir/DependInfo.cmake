@@ -8,8 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp" "CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o" "gcc" "CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o.d"
-  "/Users/jaakkop/Documents/koodii/vjay_ace/src/midi_monitor/main.cpp" "CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o" "gcc" "CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o.d"
+  "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/src/midi_monitor/MidiMonitor.cpp" "CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o" "gcc" "CMakeFiles/midi_monitor.dir/src/midi_monitor/MidiMonitor.cpp.o.d"
+  "/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/src/midi_monitor/main.cpp" "CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o" "gcc" "CMakeFiles/midi_monitor.dir/src/midi_monitor/main.cpp.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

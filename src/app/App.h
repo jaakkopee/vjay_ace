@@ -96,6 +96,12 @@ public:
     void run();
     void saveState() const;   // public: called by signal handler and onImageSelected
 
+    // Device selection (set before init())
+    void setAudioInDevice(int index) { audioInDeviceIndex_ = index; }
+    void setAudioOutDevice(int index) { audioOutDeviceIndex_ = index; }
+    void setMidiInDevice(int index) { midiInDeviceIndex_ = index; }
+    void setMidiOutDevice(int index) { midiOutDeviceIndex_ = index; }
+
 private:
         // LIF MIDI note state (per bin)
         std::array<bool, 16> lifMidiNoteOn_ = {};
@@ -141,6 +147,12 @@ private:
     PressureControlWindow pressureWin_;
     PerformanceWindow perfWin_;
     MediaPickerWindow mediaPickerWin_;
+
+    // Device indices (-1 = use default)
+    int audioInDeviceIndex_  = -1;
+    int audioOutDeviceIndex_ = -1;
+    int midiInDeviceIndex_   = -1;
+    int midiOutDeviceIndex_  = -1;
 
     // Per FX layer (slots 0=layer1, 1=layer3, 2=layer5)
     std::array<FxPatch, NUM_FX_LAYERS> fxPatches_;
