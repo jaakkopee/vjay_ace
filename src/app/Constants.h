@@ -91,6 +91,25 @@ enum class FxPatchId : int {
     ColorTemp      = 25,
     Scanline       = 26,
     Strobe         = 27,
+    // ── aux effects ──────────────────────────────────────────────────────────
+    Grayscale      = 28,
+    Invert         = 29,
+    Sepia          = 30,
+    MirrorH        = 31,
+    MirrorV        = 32,
+    Sharpen        = 33,
+    GaussianBlur   = 34,
+    VHSEffect      = 35,
+    Psychedelic    = 36,
+    NoiseDist      = 37,
+    HSVShift       = 38,
+    BlockShuffle   = 39,
+    RGBShift       = 40,
+    Fisheye        = 41,
+    EchoTrails     = 42,
+    Datamosh       = 43,
+    MotionBlur     = 44,
+    FeedbackTransform = 45,
     COUNT
 };
 
@@ -124,6 +143,24 @@ inline const char* fxPatchName(FxPatchId id) {
         case FxPatchId::ColorTemp:      return "Color Temp";
         case FxPatchId::Scanline:       return "Scanline";
         case FxPatchId::Strobe:         return "Strobe";
+        case FxPatchId::Grayscale:      return "Grayscale";
+        case FxPatchId::Invert:         return "Invert";
+        case FxPatchId::Sepia:          return "Sepia";
+        case FxPatchId::MirrorH:        return "Mirror H";
+        case FxPatchId::MirrorV:        return "Mirror V";
+        case FxPatchId::Sharpen:        return "Sharpen";
+        case FxPatchId::GaussianBlur:   return "Gaussian Blur";
+        case FxPatchId::VHSEffect:      return "VHS";
+        case FxPatchId::Psychedelic:    return "Psychedelic";
+        case FxPatchId::NoiseDist:      return "Noise Distort";
+        case FxPatchId::HSVShift:       return "HSV Shift";
+        case FxPatchId::BlockShuffle:   return "Block Shuffle";
+        case FxPatchId::RGBShift:       return "RGB Shift";
+        case FxPatchId::Fisheye:        return "Fisheye";
+        case FxPatchId::EchoTrails:     return "Echo Trails";
+        case FxPatchId::Datamosh:       return "Datamosh";
+        case FxPatchId::MotionBlur:     return "Motion Blur";
+        case FxPatchId::FeedbackTransform: return "Feedback Xform";
         default:                        return "???";
     }
 }

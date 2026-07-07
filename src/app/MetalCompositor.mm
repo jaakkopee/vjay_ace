@@ -100,6 +100,25 @@ bool MetalCompositor::init() {
     psoStrobe_       = makePSO(@"strobe_gate");
     psoPan_          = makePSO(@"pan_source");
     psoCrossfade_    = makePSO(@"crossfade_blend");
+    // ── aux effects ──────────────────────────────────────────────────────────
+    psoGrayscale_         = makePSO(@"grayscale");
+    psoInvert_            = makePSO(@"invert");
+    psoSepia_             = makePSO(@"sepia");
+    psoMirrorH_           = makePSO(@"mirror_horizontal");
+    psoMirrorV_           = makePSO(@"mirror_vertical");
+    psoSharpen_           = makePSO(@"sharpen");
+    psoGaussianBlur_      = makePSO(@"gaussian_blur");
+    psoVHS_               = makePSO(@"vhs_effect");
+    psoPsychedelic_       = makePSO(@"psychedelic_colors");
+    psoNoiseDist_         = makePSO(@"noise_distortion");
+    psoHSVShift_          = makePSO(@"hsv_shift");
+    psoBlockShuffle_      = makePSO(@"block_shuffle");
+    psoRGBShift_          = makePSO(@"rgb_shift_glitch");
+    psoFisheye_           = makePSO(@"fisheye");
+    psoEchoTrails_        = makePSO(@"echo_trails");
+    psoDatamosh_          = makePSO(@"datamosh_effect");
+    psoMotionBlur_        = makePSO(@"motion_blur");
+    psoFeedbackTransform_ = makePSO(@"feedback_transform");
 
     // Allocate layer textures
     for (int i = 0; i < NUM_LAYERS; ++i)
@@ -490,6 +509,80 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
             params.float_params[1] = 0.05f + p1 * 0.9f;  // duty
             params.float_params[2] = t;
             break;
+        // ── aux effects ──────────────────────────────────────────────────────
+        case FxPatchId::Grayscale:      pso = psoGrayscale_; break;
+        case FxPatchId::Invert:         pso = psoInvert_; break;
+        case FxPatchId::Sepia:          pso = psoSepia_; break;
+        case FxPatchId::MirrorH:        pso = psoMirrorH_; break;
+        case FxPatchId::MirrorV:        pso = psoMirrorV_; break;
+        case FxPatchId::Sharpen:
+            pso = psoSharpen_;
+            params.float_params[0] = p0 * 2.0f;          // strength 0–2
+            break;
+        case FxPatchId::GaussianBlur:
+            pso = psoGaussianBlur_;
+            params.int_params[0]   = 3 + static_cast<int>(p0 * 10); // kernel 3–13
+            params.float_params[0] = 1.0f + p0 * 4.0f;              // sigma
+            break;
+        case FxPatchId::VHSEffect:
+            pso = psoVHS_;
+            params.float_params[0] = p0;                  // noise intensity
+            params.float_params[1] = p1;                  // distortion
+            params.float_params[2] = p0 * 5.0f;          // color bleed
+            break;
+        case FxPatchId::Psychedelic:
+            pso = psoPsychedelic_;
+            params.float_params[0] = p0 * 2.0f;          // intensity 0–2
+            break;
+        case FxPatchId::NoiseDist:
+            pso = psoNoiseDist_;
+            params.float_params[0] = p0 * 40.0f;         // intensity px
+            params.float_params[1] = 0.1f + p1 * 0.9f;  // scale
+            params.int_params[0]   = static_cast<int>(t * 10.0f); // animated seed
+            break;
+        case FxPatchId::HSVShift:
+            pso = psoHSVShift_;
+            params.float_params[0] = p0;                  // hue shift 0–1
+            params.float_params[1] = 0.5f + p1 * 1.5f;  // sat multiplier
+            params.float_params[2] = 1.0f;               // val multiplier (neutral)
+            break;
+        case FxPatchId::BlockShuffle:
+            pso = psoBlockShuffle_;
+            params.int_params[0]   = 8 + static_cast<int>(p0 * 56); // block 8–64
+            params.float_params[0] = p1;                  // intensity
+            params.int_params[1]   = static_cast<int>(t * 5.0f);   // animated seed
+            break;
+        case FxPatchId::RGBShift:
+            pso = psoRGBShift_;
+            params.float_params[0] = p0 * 30.0f;         // shift amount px
+            params.float_params[1] = p1 * 6.28318f;      // angle
+            break;
+        case FxPatchId::Fisheye:
+            pso = psoFisheye_;
+            params.float_params[0] = p0 * 2.0f - 0.5f;  // strength -0.5..1.5
+            break;
+        case FxPatchId::EchoTrails:
+            pso = psoEchoTrails_;
+            params.float_params[0] = 0.5f + p0 * 0.49f; // prev weight 0.5–0.99
+            params.float_params[1] = 0.5f - p0 * 0.49f; // curr weight
+            break;
+        case FxPatchId::Datamosh:
+            pso = psoDatamosh_;
+            params.float_params[0] = p0;                  // intensity
+            params.int_params[0]   = 4 + static_cast<int>(p1 * 28); // block 4–32
+            break;
+        case FxPatchId::MotionBlur:
+            pso = psoMotionBlur_;
+            params.float_params[0] = p0 * 0.95f;         // strength 0–0.95
+            break;
+        case FxPatchId::FeedbackTransform:
+            pso = psoFeedbackTransform_;
+            params.float_params[0] = 0.5f + p0 * 0.49f; // mix ratio 0.5–0.99
+            params.float_params[1] = 1.0f + p1 * 0.3f;  // zoom 1.0–1.3
+            params.float_params[2] = p0 * 15.0f;         // rotation deg
+            params.float_params[3] = 0.0f;               // translate x
+            params.float_params[4] = 0.0f;               // translate y
+            break;
     }
 
     // Inject audio bands into float_params[8..15] and RMS into float_params[7].
@@ -499,8 +592,17 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
     for (int b = 0; b < 8; ++b)
         params.float_params[8 + b] = audioBands_[b] * gain;
 
+    // Helper: does this patch need a previous-frame feedback texture at binding 2?
+    auto needsFeedback = [](FxPatchId p) {
+        return p == FxPatchId::FeedbackZoom
+            || p == FxPatchId::EchoTrails
+            || p == FxPatchId::Datamosh
+            || p == FxPatchId::MotionBlur
+            || p == FxPatchId::FeedbackTransform;
+    };
+
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-    if (patch == FxPatchId::FeedbackZoom && feedbackTex_[fxSlot]) {
+    if (needsFeedback(patch) && feedbackTex_[fxSlot]) {
         id<MTLTexture> feedbackInput = feedbackPrimed_[fxSlot] ? feedbackTex_[fxSlot] : src;
         [enc setComputePipelineState:pso];
         [enc setTexture:src atIndex:0];
@@ -528,7 +630,7 @@ void MetalCompositor::runFxPass(id<MTLCommandBuffer> cmd,
     }
     [enc endEncoding];
 
-    if (patch == FxPatchId::FeedbackZoom && feedbackTex_[fxSlot]) {
+    if (needsFeedback(patch) && feedbackTex_[fxSlot]) {
         id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
         [blit copyFromTexture:dst sourceSlice:0 sourceLevel:0
                  sourceOrigin:MTLOriginMake(0, 0, 0)

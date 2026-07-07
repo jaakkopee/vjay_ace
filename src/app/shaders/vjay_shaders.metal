@@ -1205,3 +1205,268 @@ kernel void lif_replace(
     float3 replaced = mix(src.rgb * 0.15f, neural, 0.75f + lif.g * 0.2f);
     output.write(float4(mix(src.rgb, replaced, influence), src.a), gid);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AUX EFFECTS (from src/app/shaders/aux/)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Shared helpers used by aux kernels ───────────────────────────────────────
+
+inline uint hash_u(int x, int y, int seed) {
+    uint n = uint(seed) + uint(x) * 374761393u + uint(y) * 668265263u;
+    n = (n ^ (n >> 13)) * 1274126177u;
+    return n ^ (n >> 16);
+}
+inline float rand01(int x, int y, int seed) {
+    return float(hash_u(x, y, seed) & 0x7fffffff) / 2147483647.0f;
+}
+inline float4 sample_bilinear(texture2d<float, access::read> tex, float2 coord) {
+    int2 dims = int2(tex.get_width(), tex.get_height());
+    if (coord.x < 0.0f || coord.y < 0.0f || coord.x >= dims.x || coord.y >= dims.y) return float4(0.0);
+    int x1 = int(floor(coord.x)); int y1 = int(floor(coord.y));
+    int x2 = min(x1 + 1, dims.x - 1); int y2 = min(y1 + 1, dims.y - 1);
+    float fx = coord.x - float(x1); float fy = coord.y - float(y1);
+    float4 q11 = tex.read(uint2(x1, y1)); float4 q21 = tex.read(uint2(x2, y1));
+    float4 q12 = tex.read(uint2(x1, y2)); float4 q22 = tex.read(uint2(x2, y2));
+    return mix(mix(q11, q21, fx), mix(q12, q22, fx), fy);
+}
+
+// ── grayscale / invert / sepia ───────────────────────────────────────────────
+kernel void grayscale(texture2d<float, access::read> input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input.get_width() || gid.y >= input.get_height()) return;
+    float4 p = input.read(gid); float g = 0.299f*p.r + 0.587f*p.g + 0.114f*p.b;
+    output.write(float4(g, g, g, p.a), gid);
+}
+kernel void invert(texture2d<float, access::read> input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input.get_width() || gid.y >= input.get_height()) return;
+    float4 p = input.read(gid); output.write(float4(1.0f - p.rgb, p.a), gid);
+}
+kernel void sepia(texture2d<float, access::read> input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input.get_width() || gid.y >= input.get_height()) return;
+    float4 p = input.read(gid);
+    float r = p.r*0.393f + p.g*0.769f + p.b*0.189f;
+    float g = p.r*0.349f + p.g*0.686f + p.b*0.168f;
+    float b = p.r*0.272f + p.g*0.534f + p.b*0.131f;
+    output.write(clamp(float4(r, g, b, p.a), 0.0f, 1.0f), gid);
+}
+
+// ── mirror ───────────────────────────────────────────────────────────────────
+kernel void mirror_horizontal(texture2d<float, access::read> input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input.get_width() || gid.y >= input.get_height()) return;
+    output.write(input.read(uint2(input.get_width() - 1 - gid.x, gid.y)), gid);
+}
+kernel void mirror_vertical(texture2d<float, access::read> input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input.get_width() || gid.y >= input.get_height()) return;
+    output.write(input.read(uint2(gid.x, input.get_height() - 1 - gid.y)), gid);
+}
+
+// ── sharpen ──────────────────────────────────────────────────────────────────
+kernel void sharpen(texture2d<float, access::read> input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    int W = input.get_width(), H = input.get_height();
+    if (gid.x >= W || gid.y >= H) return;
+    float s = params.float_params[0];
+    float4 c = input.read(gid);
+    float4 sum = c * (1.0f + 4.0f * s);
+    int2 p = int2(gid);
+    sum += input.read(uint2(clamp(p.x-1,0,W-1), p.y)) * (-s);
+    sum += input.read(uint2(clamp(p.x+1,0,W-1), p.y)) * (-s);
+    sum += input.read(uint2(p.x, clamp(p.y-1,0,H-1))) * (-s);
+    sum += input.read(uint2(p.x, clamp(p.y+1,0,H-1))) * (-s);
+    output.write(clamp(sum, 0.0f, 1.0f), gid);
+}
+
+// ── gaussian_blur ────────────────────────────────────────────────────────────
+kernel void gaussian_blur(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    int W = input_image.get_width(), H = input_image.get_height();
+    if (gid.x >= W || gid.y >= H) return;
+    int ks = max(1, params.int_params[0]); float sigma = max(0.001f, params.float_params[0]);
+    int hs = ks / 2; float denom = 2.0f * sigma * sigma;
+    float4 acc = float4(0.0f); float ws = 0.0f;
+    for (int y = -hs; y <= hs; ++y) for (int x = -hs; x <= hs; ++x) {
+        float w = exp(-float(x*x + y*y) / denom);
+        acc += input_image.read(uint2(clamp(int(gid.x)+x,0,W-1), clamp(int(gid.y)+y,0,H-1))) * w;
+        ws += w;
+    }
+    output_image.write(acc / ws, gid);
+}
+
+// ── vhs_effect ───────────────────────────────────────────────────────────────
+kernel void vhs_effect(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    int W = input_image.get_width(), H = input_image.get_height();
+    if (gid.x >= W || gid.y >= H) return;
+    float noise_int = clamp(params.float_params[0], 0.0f, 1.0f);
+    float distortion = clamp(params.float_params[1], 0.0f, 1.0f);
+    float color_bleed = clamp(params.float_params[2], 0.0f, 10.0f);
+    int seed = 12345;
+    int shift = int(sin(float(gid.y) * 0.1f) * distortion * 10.0f);
+    int sx = ((int(gid.x) + shift) % W + W) % W;
+    float4 pix = input_image.read(uint2(sx, gid.y));
+    if (color_bleed > 0.0f && sx > 0)
+        pix = pix * 0.7f + input_image.read(uint2(sx-1, gid.y)) * 0.3f * (color_bleed / 10.0f);
+    if (noise_int > 0.0f) {
+        pix.r += (rand01(sx, int(gid.y), seed)   - 0.5f) * noise_int * 0.3f;
+        pix.g += (rand01(sx, int(gid.y), seed+1) - 0.5f) * noise_int * 0.3f;
+        pix.b += (rand01(sx, int(gid.y), seed+2) - 0.5f) * noise_int * 0.3f;
+    }
+    output_image.write(clamp(pix, 0.0f, 1.0f), gid);
+}
+
+// ── psychedelic_colors ───────────────────────────────────────────────────────
+kernel void psychedelic_colors(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input_image.get_width() || gid.y >= input_image.get_height()) return;
+    float intensity = clamp(params.float_params[0], 0.0f, 2.0f);
+    float wave = sin((float(gid.x) + float(gid.y)) * 0.1f);
+    float4 pix = input_image.read(gid);
+    float3 hsv = rgb_to_hsv(pix.rgb);
+    hsv.x = fract(hsv.x + intensity * 0.5f * wave);
+    hsv.y = clamp(hsv.y * (1.0f + intensity), 0.0f, 1.0f);
+    hsv.z = clamp(hsv.z * (1.0f + intensity * 0.3f), 0.0f, 1.0f);
+    output_image.write(float4(hsv_to_rgb(hsv), pix.a), gid);
+}
+
+// ── noise_distortion ─────────────────────────────────────────────────────────
+kernel void noise_distortion(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input_image.get_width() || gid.y >= input_image.get_height()) return;
+    float intensity = clamp(params.float_params[0], 0.0f, 100.0f);
+    float scale = clamp(params.float_params[1], 0.01f, 1.0f);
+    int seed = params.int_params[0];
+    float nx = rand01(int(float(gid.x)*scale), int(float(gid.y)*scale), seed);
+    float ny = rand01(int(float(gid.x)*scale), int(float(gid.y)*scale), seed+1);
+    output_image.write(sample_bilinear(input_image, float2(gid) + (float2(nx, ny) - 0.5f) * intensity), gid);
+}
+
+// ── hsv_shift ────────────────────────────────────────────────────────────────
+kernel void hsv_shift(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input_image.get_width() || gid.y >= input_image.get_height()) return;
+    float4 pix = input_image.read(gid);
+    float3 hsv = rgb_to_hsv(pix.rgb);
+    hsv.x = fract(hsv.x + params.float_params[0]);
+    hsv.y = clamp(hsv.y * params.float_params[1], 0.0f, 1.0f);
+    hsv.z = clamp(hsv.z * params.float_params[2], 0.0f, 1.0f);
+    output_image.write(float4(hsv_to_rgb(hsv), pix.a), gid);
+}
+
+// ── block_shuffle ────────────────────────────────────────────────────────────
+kernel void block_shuffle(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    int W = input_image.get_width(), H = input_image.get_height();
+    if (gid.x >= W || gid.y >= H) return;
+    int bs = max(4, min(128, params.int_params[0]));
+    float intensity = clamp(params.float_params[0], 0.0f, 1.0f);
+    int seed = params.int_params[1];
+    int bx = int(gid.x)/bs, by = int(gid.y)/bs;
+    int bsx = (W+bs-1)/bs, bsy = (H+bs-1)/bs;
+    int tbx = bx, tby = by;
+    if (rand01(bx, by, seed) <= intensity) {
+        tbx = int(rand01(bx, by, seed+1) * bsx) % bsx;
+        tby = int(rand01(bx, by, seed+2) * bsy) % bsy;
+    }
+    int sx = tbx*bs + int(gid.x) - bx*bs;
+    int sy = tby*bs + int(gid.y) - by*bs;
+    output_image.write((sx < W && sy < H) ? input_image.read(uint2(sx, sy)) : float4(0.0f), gid);
+}
+
+// ── rgb_shift_glitch ─────────────────────────────────────────────────────────
+kernel void rgb_shift_glitch(texture2d<float, access::read> input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    int W = input.get_width(), H = input.get_height();
+    if (gid.x >= W || gid.y >= H) return;
+    float2 off = float2(cos(params.float_params[1]), sin(params.float_params[1])) * params.float_params[0];
+    float2 rp = clamp(float2(gid) + off, float2(0), float2(W-1, H-1));
+    float2 bp = clamp(float2(gid) - off, float2(0), float2(W-1, H-1));
+    float4 rc = input.read(uint2(rp)), gc = input.read(gid), bc = input.read(uint2(bp));
+    output.write(float4(rc.r, gc.g, bc.b, gc.a), gid);
+}
+
+// ── fisheye ──────────────────────────────────────────────────────────────────
+kernel void fisheye(texture2d<float, access::read> input [[texture(0)]],
+    texture2d<float, access::write> output [[texture(1)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    int W = input.get_width(), H = input.get_height();
+    if (gid.x >= W || gid.y >= H) return;
+    float strength = params.float_params[0];
+    float cx = float(W)*0.5f, cy = float(H)*0.5f;
+    float radius = min(cx, cy);
+    float dx = float(gid.x) - cx, dy = float(gid.y) - cy;
+    float dist = sqrt(dx*dx + dy*dy);
+    if (dist < radius && dist > 0.0f) {
+        float nd = dist / radius;
+        float scale = pow(nd, 1.0f + strength) / nd;
+        output.write(sample_bilinear(input, float2(cx + dx*scale, cy + dy*scale)), gid);
+    } else {
+        output.write(dist >= radius ? float4(0.0f) : input.read(gid), gid);
+    }
+}
+
+// ── echo_trails (needs prev frame texture[2]) ────────────────────────────────
+kernel void echo_trails(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    texture2d<float, access::read> prev_image [[texture(2)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input_image.get_width() || gid.y >= input_image.get_height()) return;
+    float prev_w = params.float_params[0], curr_w = params.float_params[1];
+    if (curr_w <= 0.0f) { prev_w = clamp(prev_w, 0.0f, 1.0f) * 0.3f; curr_w = 0.7f; }
+    output_image.write(input_image.read(gid) * curr_w + prev_image.read(gid) * prev_w, gid);
+}
+
+// ── datamosh_effect (needs prev frame texture[2]) ────────────────────────────
+kernel void datamosh_effect(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    texture2d<float, access::read> prev_image [[texture(2)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input_image.get_width() || gid.y >= input_image.get_height()) return;
+    float intensity = clamp(params.float_params[0], 0.0f, 1.0f);
+    int bs = max(4, min(32, params.int_params[0]));
+    bool use_prev = rand01(int(gid.x)/bs, int(gid.y)/bs, 54321) < intensity;
+    output_image.write(use_prev ? prev_image.read(gid) : input_image.read(gid), gid);
+}
+
+// ── motion_blur (needs prev frame texture[2]) ────────────────────────────────
+kernel void motion_blur(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    texture2d<float, access::read> prev_image [[texture(2)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= input_image.get_width() || gid.y >= input_image.get_height()) return;
+    float s = clamp(params.float_params[0], 0.0f, 1.0f);
+    output_image.write(input_image.read(gid)*(1.0f-s) + prev_image.read(gid)*s, gid);
+}
+
+// ── feedback_transform (needs prev frame texture[2]) ────────────────────────
+kernel void feedback_transform(texture2d<float, access::read> input_image [[texture(0)]],
+    texture2d<float, access::write> output_image [[texture(1)]],
+    texture2d<float, access::read> prev_image [[texture(2)]],
+    constant Params& params [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    int W = input_image.get_width(), H = input_image.get_height();
+    if (gid.x >= W || gid.y >= H) return;
+    float mix_ratio = clamp(params.float_params[0], 0.0f, 1.0f);
+    float zoom = max(params.float_params[1], 0.001f);
+    float angle_rad = params.float_params[2] * 3.14159265f / 180.0f;
+    float tx = params.float_params[3], ty = params.float_params[4];
+    float cx = float(W)*0.5f, cy = float(H)*0.5f;
+    float cos_a = cos(angle_rad), sin_a = sin(angle_rad);
+    float dx = float(gid.x) - cx, dy = float(gid.y) - cy;
+    float rx = (dx * cos_a - dy * sin_a) / zoom;
+    float ry = (dx * sin_a + dy * cos_a) / zoom;
+    float4 prev = sample_bilinear(prev_image, float2(cx + rx + tx, cy + ry + ty));
+    output_image.write(input_image.read(gid)*(1.0f-mix_ratio) + prev*mix_ratio, gid);
+}
+

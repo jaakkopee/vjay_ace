@@ -146,6 +146,25 @@ private:
     id<MTLComputePipelineState> psoScanline_     = nil;
     id<MTLComputePipelineState> psoStrobe_       = nil;
     id<MTLComputePipelineState> psoCrossfade_    = nil;
+    // ── aux effects ──────────────────────────────────────────────────────────
+    id<MTLComputePipelineState> psoGrayscale_         = nil;
+    id<MTLComputePipelineState> psoInvert_            = nil;
+    id<MTLComputePipelineState> psoSepia_             = nil;
+    id<MTLComputePipelineState> psoMirrorH_           = nil;
+    id<MTLComputePipelineState> psoMirrorV_           = nil;
+    id<MTLComputePipelineState> psoSharpen_           = nil;
+    id<MTLComputePipelineState> psoGaussianBlur_      = nil;
+    id<MTLComputePipelineState> psoVHS_               = nil;
+    id<MTLComputePipelineState> psoPsychedelic_       = nil;
+    id<MTLComputePipelineState> psoNoiseDist_         = nil;
+    id<MTLComputePipelineState> psoHSVShift_          = nil;
+    id<MTLComputePipelineState> psoBlockShuffle_      = nil;
+    id<MTLComputePipelineState> psoRGBShift_          = nil;
+    id<MTLComputePipelineState> psoFisheye_           = nil;
+    id<MTLComputePipelineState> psoEchoTrails_        = nil;
+    id<MTLComputePipelineState> psoDatamosh_          = nil;
+    id<MTLComputePipelineState> psoMotionBlur_        = nil;
+    id<MTLComputePipelineState> psoFeedbackTransform_ = nil;
 
     // Per-source-slot rotation textures and angles
     id<MTLTexture>              rotateTex_[NUM_SRC_LAYERS] = {nil, nil, nil};
