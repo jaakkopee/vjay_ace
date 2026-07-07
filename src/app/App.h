@@ -269,6 +269,8 @@ private:
     void onKnobDrag(int knobIdx, float normValue);
     // Called by MediaPickerWindow when an image is picked for a slot
     void onImageSelected(int slotIdx, const std::string& path);
+    // Called by MediaPickerWindow when an effect is selected for an FX layer
+    void onEffectSelected(int fxLayerIdx, FxPatchId patch);
 
     // ── Engine helpers ────────────────────────────────────────────────────
     // Apply one knob value to the correct engine target (no pickup, no display).

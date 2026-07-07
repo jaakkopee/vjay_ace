@@ -800,6 +800,9 @@ void App::wireCallbacks() {
     mediaPickerWin_.onFileSelected = [this](int slot, const std::string& path){
         onImageSelected(slot, path);
     };
+    mediaPickerWin_.onEffectSelected = [this](int fxLayerIdx, FxPatchId patch){
+        onEffectSelected(fxLayerIdx, patch);
+    };
 
     // Keyboard shortcut: M key toggles LIF MIDI output
     controlWin_.onLIFMidiToggle = [this]() { toggleLifMidi(); };
@@ -1552,6 +1555,7 @@ void App::onSceneSelect(int sceneIdx) {
         fxPatches_[slot].id = sc.fx[slot];
         compositor_.setFxPatch(slot, sc.fx[slot]);
         layers_.setFxPatch(slot * 2 + 1, sc.fx[slot]);
+        mediaPickerWin_.setLayerEffect(slot * 2 + 1, sc.fx[slot]);
     }
     controlWin_.setSceneName(sc.name);
     mediaPickerWin_.setSceneName(sc.name);
@@ -1753,6 +1757,28 @@ void App::onImageSelected(int slotIdx, const std::string& path) {
 
     layers_.loadMedia(layerIdx, path);
     saveState();  // persist immediately — don't rely on clean exit
+}
+
+// ── Effect selection ──────────────────────────────────────────────────────────
+
+void App::onEffectSelected(int fxLayerIdx, FxPatchId patch) {
+    if (fxLayerIdx < 1 || fxLayerIdx >= NUM_LAYERS || fxLayerIdx % 2 == 0) return;  // must be odd (1, 3, 5)
+    if (currentScene_ < 0)
+        onSceneSelect(0);
+
+    // Convert layer index to FX slot (1→0, 3→1, 5→2)
+    int fxSlot = (fxLayerIdx - 1) / 2;
+    if (fxSlot < 0 || fxSlot >= NUM_FX_LAYERS) return;
+
+    // Update the compositor
+    fxPatches_[fxSlot].id = patch;
+    compositor_.setFxPatch(fxLayerIdx, patch);
+
+    // Update the mediaPickerWindow to reflect the selection
+    mediaPickerWin_.setLayerEffect(fxLayerIdx, patch);
+
+    std::cout << "[App] Set FX layer " << fxLayerIdx << " to " << fxPatchName(patch) << "\n";
+    saveState();  // persist immediately
 }
 
 // ── State persistence ─────────────────────────────────────────────────────────

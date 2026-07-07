@@ -73,9 +73,13 @@ void MediaPickerWindow::buildGui(int width, int height) {
         slotButtons_[i]->setPosition(10 + i * (btnW + 5), btnY);
         slotButtons_[i]->setSize(btnW, btnH);
         slotButtons_[i]->setTextSize(12);
+        slotButtons_[i]->getRenderer()->setTextColor(tgui::Color(230, 235, 255));
         slotButtons_[i]->onPress([this, i]{ selectSlot(i); });
         gui_.add(slotButtons_[i]);
     }
+
+    // Build effect selection section
+    buildEffectSection(110, width);
 
     // Scrollable file list panel
     const int panelY = HEADER_H;
@@ -111,6 +115,105 @@ void MediaPickerWindow::buildGui(int width, int height) {
 
     // Highlight the default active slot
     selectSlot(0);
+}
+
+// ── Effect section building ──────────────────────────────────────────────────
+
+void MediaPickerWindow::buildEffectSection(int y, int width) {
+    // Label
+    auto effectLabel = tgui::Label::create("EFFECTS");
+    effectLabel->setPosition(12, y);
+    effectLabel->setTextSize(13);
+    effectLabel->getRenderer()->setTextColor(TEXT_DIM);
+    gui_.add(effectLabel);
+
+    const int btnW  = (width - 30) / 3;
+    const int btnY  = y + 20;
+    const int btnH  = 24;
+    const int panelH = 15 * 28;  // 15 visible effects at once
+
+    // Create 3 effect selection buttons + scrollable panels for FX layers 1, 3, 5
+    for (int i = 0; i < NUM_FX_LAYERS; ++i) {
+        const int btnX = 10 + i * (btnW + 5);
+        int fxLayerIdx = 1 + i * 2;  // 1, 3, 5
+
+        // Button showing current selection
+        auto btn = tgui::Button::create(fxPatchName(FxPatchId::None));
+        btn->setPosition(btnX, btnY);
+        btn->setSize(btnW, btnH);
+        btn->setTextSize(11);
+        btn->getRenderer()->setTextColor(tgui::Color(230, 235, 255));
+        btn->getRenderer()->setBackgroundColor(tgui::Color(40, 40, 55));
+        btn->getRenderer()->setBackgroundColorHover(tgui::Color(50, 60, 80));
+        
+        // Create hidden scrollable panel with effect list — opens downward below the button
+        auto panel = tgui::ScrollablePanel::create({static_cast<float>(btnW),
+                                                     static_cast<float>(panelH)});
+        panel->setPosition(btnX, btnY + btnH + 2);
+        panel->getRenderer()->setBackgroundColor(tgui::Color(30, 30, 45));
+        panel->setVisible(false);  // hidden by default
+        gui_.add(panel);
+
+        // Populate panel with effect buttons
+        for (int j = 0; j < static_cast<int>(FxPatchId::COUNT); ++j) {
+            auto effectBtn = tgui::Button::create(fxPatchName(static_cast<FxPatchId>(j)));
+            effectBtn->setPosition(0, j * 28);
+            effectBtn->setSize(btnW - 4, 26);
+            effectBtn->setTextSize(10);
+            effectBtn->getRenderer()->setBackgroundColor((j % 2 == 0)
+                ? tgui::Color(35, 35, 50) : tgui::Color(40, 40, 60));
+            effectBtn->getRenderer()->setBackgroundColorHover(ROW_HOVER);
+            effectBtn->getRenderer()->setBorders(0);
+            effectBtn->getRenderer()->setTextColor(tgui::Color(230, 235, 255));
+
+            // Capture effect selection
+            FxPatchId patch = static_cast<FxPatchId>(j);
+            effectBtn->onPress([this, i, fxLayerIdx, patch, btn]() {
+                selectedEffects_[i] = patch;
+                btn->setText(fxPatchName(patch));
+                effectPanels_[i]->setVisible(false);
+                openEffectDropdown_ = -1;
+                if (onEffectSelected) {
+                    onEffectSelected(fxLayerIdx, patch);
+                }
+            });
+            panel->add(effectBtn);
+        }
+        
+        // Set scroll content size
+        panel->setContentSize({static_cast<float>(btnW - 4),
+                               static_cast<float>(static_cast<int>(FxPatchId::COUNT) * 28)});
+
+        // Button click toggles panel visibility
+        btn->onPress([this, i, panel, btn]() {
+            // Close other open panels
+            if (openEffectDropdown_ >= 0 && openEffectDropdown_ != i) {
+                effectPanels_[openEffectDropdown_]->setVisible(false);
+            }
+            // Toggle current panel
+            bool isVisible = panel->isVisible();
+            panel->setVisible(!isVisible);
+            if (!isVisible) panel->moveToFront();  // render above file list
+            openEffectDropdown_ = isVisible ? -1 : i;
+        });
+
+        effectButtons_[i] = btn;
+        effectPanels_[i] = panel;
+        gui_.add(btn);
+    }
+}
+
+// ── Setters ───────────────────────────────────────────────────────────────────
+
+void MediaPickerWindow::setLayerEffect(int fxLayerIdx, FxPatchId patch) {
+    // fxLayerIdx is 1, 3, or 5; convert to dropdown index 0, 1, 2
+    int btnIdx = (fxLayerIdx - 1) / 2;
+    if (btnIdx < 0 || btnIdx >= NUM_FX_LAYERS) return;
+
+    selectedEffects_[btnIdx] = patch;
+    if (effectButtons_[btnIdx]) {
+        effectButtons_[btnIdx]->setText(fxPatchName(patch));
+    }
 }
 
 // ── Slot selection ─────────────────────────────────────────────────────────────
@@ -224,7 +327,18 @@ void MediaPickerWindow::setSceneName(const std::string& name) {
 
 bool MediaPickerWindow::handleEvents() {
     while (const auto event = window_.pollEvent()) {
+        // Close open effect dropdowns on Escape
+        if (event->is<sf::Event::KeyPressed>()) {
+            auto keyEvent = event->getIf<sf::Event::KeyPressed>();
+            if (keyEvent && keyEvent->code == sf::Keyboard::Key::Escape && openEffectDropdown_ >= 0) {
+                effectPanels_[openEffectDropdown_]->setVisible(false);
+                openEffectDropdown_ = -1;
+                continue;  // don't pass to gui
+            }
+        }
+        
         gui_.handleEvent(*event);
+        
         if (event->is<sf::Event::Closed>()) { window_.close(); return false; }
     }
     return true;
