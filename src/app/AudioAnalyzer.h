@@ -6,6 +6,8 @@
 #include <thread>
 #include <mutex>
 #include <AudioUnit/AudioUnit.h>
+#include <AudioToolbox/AudioToolbox.h>
+#include <CoreAudio/CoreAudio.h>
 
 // ── AudioAnalyzer ─────────────────────────────────────────────────────────────
 // Captures audio from the default input device via Core Audio, computes an
@@ -70,13 +72,13 @@ private:
 
     bool running_ = false;
 
+    // HAL IO procedure tracking
+    AudioDeviceID halDeviceID_ = kAudioObjectUnknown;
+    AudioDeviceIOProcID halIOProcID_ = nullptr;
+
     int selectedInputDeviceIndex_ = -1;
     int selectedOutputDeviceIndex_ = -1;
     float sampleRate_ = 44100.0f;
-    
-    // Audio processing thread for pulling HAL data
-    std::thread processingThread_;
-    void audioProcessingThreadRun();
 
     // vDSP FFT state (opaque pointer to avoid header coupling)
     void* fftSetup_ = nullptr;
