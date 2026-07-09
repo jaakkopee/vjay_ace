@@ -1,0 +1,5 @@
+/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/CMakeFiles/midi_monitor.dir
+/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/CMakeFiles/vjay_ace.dir
+/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/CMakeFiles/copy_metal_shader.dir
+/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/CMakeFiles/edit_cache.dir
+/Users/jaakkop/Documents/Dokumentit – Jaakko - Mac mini/koodii/vjay_ace/CMakeFiles/rebuild_cache.dir
