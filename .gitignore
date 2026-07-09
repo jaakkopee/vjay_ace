@@ -1,1 +1,8 @@
+#personal files
 Heikki_stash/
+
+# CMake generated files
+CmakeFiles/
+*.cmake
+CMakeCache.txt
+cmake_install.cmake
