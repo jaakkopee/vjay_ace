@@ -379,6 +379,30 @@ src/app/PressureControlWindow.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/PressureControlWindow.cpp.s
 .PHONY : src/app/PressureControlWindow.cpp.s
 
+src/app/StartupOptions.o: src/app/StartupOptions.cpp.o
+.PHONY : src/app/StartupOptions.o
+
+# target to build an object file
+src/app/StartupOptions.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/StartupOptions.cpp.o
+.PHONY : src/app/StartupOptions.cpp.o
+
+src/app/StartupOptions.i: src/app/StartupOptions.cpp.i
+.PHONY : src/app/StartupOptions.i
+
+# target to preprocess a source file
+src/app/StartupOptions.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/StartupOptions.cpp.i
+.PHONY : src/app/StartupOptions.cpp.i
+
+src/app/StartupOptions.s: src/app/StartupOptions.cpp.s
+.PHONY : src/app/StartupOptions.s
+
+# target to generate assembly for a file
+src/app/StartupOptions.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/StartupOptions.cpp.s
+.PHONY : src/app/StartupOptions.cpp.s
+
 src/app/VideoDecoder.o: src/app/VideoDecoder.cpp.o
 .PHONY : src/app/VideoDecoder.o
 
@@ -498,6 +522,9 @@ help:
 	@echo "... src/app/PressureControlWindow.o"
 	@echo "... src/app/PressureControlWindow.i"
 	@echo "... src/app/PressureControlWindow.s"
+	@echo "... src/app/StartupOptions.o"
+	@echo "... src/app/StartupOptions.i"
+	@echo "... src/app/StartupOptions.s"
 	@echo "... src/app/VideoDecoder.o"
 	@echo "... src/app/VideoDecoder.i"
 	@echo "... src/app/VideoDecoder.s"

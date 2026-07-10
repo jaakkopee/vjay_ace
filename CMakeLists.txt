@@ -86,6 +86,7 @@ if(APPLE)
 
     # ── vjay_ace main app ─────────────────────────────────────────────────────────
     add_executable(vjay_ace
+        src/app/StartupOptions.cpp
         src/app/main.mm
         src/app/App.mm
         src/app/CompositorFactory.mm
@@ -128,15 +129,16 @@ if(APPLE)
     add_custom_target(copy_metal_shader ALL DEPENDS ${METAL_DST})
     add_dependencies(vjay_ace copy_metal_shader)
 elseif(WIN32)
-    message(STATUS "Configuring Windows port skeleton target")
+    message(STATUS "Configuring Windows compositor preview target")
     add_executable(vjay_ace
-        src/app/windows/main_win_stub.cpp
+        src/app/StartupOptions.cpp
+        src/app/windows/main_win.cpp
         src/app/windows/CompositorFactory_win.cpp
         src/app/windows/WindowsCompositorD3D11.cpp
         src/app/windows/WindowsCompositorStub.cpp
     )
     target_include_directories(vjay_ace PRIVATE src)
-    target_compile_definitions(vjay_ace PRIVATE VJAY_WINDOWS_PORT_STUB=1)
+    target_compile_definitions(vjay_ace PRIVATE VJAY_WINDOWS_COMPOSITOR_PREVIEW=1)
     target_link_libraries(vjay_ace PRIVATE d3d11 dxgi d3dcompiler)
 else()
     message(FATAL_ERROR "Unsupported platform. Current project supports APPLE and a WIN32 skeleton.")

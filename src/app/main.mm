@@ -1,5 +1,6 @@
 #include "App.h"
 #include "MidiRouter.h"
+#include "StartupOptions.h"
 #import  <Cocoa/Cocoa.h>
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreAudio/CoreAudio.h>
@@ -111,41 +112,24 @@ static void listMidiDevices() {
 }
 
 int main(int argc, char** argv) {
-    int audioInIdx = -1, audioOutIdx = -1, midiInIdx = -1, midiOutIdx = -1;
-    
-    // Parse command line arguments
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--list-devices" || arg == "-l") {
-            std::cout << "\nvjay_ace Device List\n";
-            listAudioDevices();
-            listMidiDevices();
-            std::cout << "\n";
-            return 0;
-        }
-        if (arg == "--help" || arg == "-h") {
-            std::cout << "\nUsage: vjay_ace [OPTIONS]\n\n";
-            std::cout << "OPTIONS:\n";
-            std::cout << "  --list-devices, -l           List all MIDI and audio devices\n";
-            std::cout << "  --audio-in INDEX             Audio input device index\n";
-            std::cout << "  --audio-out INDEX            Audio output device index\n";
-            std::cout << "  --midi-in INDEX              MIDI input device index\n";
-            std::cout << "  --midi-out INDEX             MIDI output device index\n";
-            std::cout << "  --help, -h                   Show this help message\n\n";
-            return 0;
-        }
-        if (arg == "--audio-in" && i + 1 < argc) {
-            audioInIdx = std::stoi(argv[++i]);
-        }
-        if (arg == "--audio-out" && i + 1 < argc) {
-            audioOutIdx = std::stoi(argv[++i]);
-        }
-        if (arg == "--midi-in" && i + 1 < argc) {
-            midiInIdx = std::stoi(argv[++i]);
-        }
-        if (arg == "--midi-out" && i + 1 < argc) {
-            midiOutIdx = std::stoi(argv[++i]);
-        }
+    StartupOptions opts;
+    std::string parseError;
+    if (!parseStartupOptions(argc, argv, opts, parseError)) {
+        std::cerr << "[main] " << parseError << "\n";
+        printStartupHelp(std::cerr);
+        return 2;
+    }
+
+    if (opts.showHelp) {
+        printStartupHelp(std::cout);
+        return 0;
+    }
+    if (opts.listDevices) {
+        std::cout << "\nvjay_ace Device List\n";
+        listAudioDevices();
+        listMidiDevices();
+        std::cout << "\n";
+        return 0;
     }
     
     // Cocoa requires NSApplication to be initialised before any window
@@ -155,10 +139,10 @@ int main(int argc, char** argv) {
 
     App app;
     // Set device indices before init()
-    if (audioInIdx >= 0) app.setAudioInDevice(audioInIdx);
-    if (audioOutIdx >= 0) app.setAudioOutDevice(audioOutIdx);
-    if (midiInIdx >= 0) app.setMidiInDevice(midiInIdx);
-    if (midiOutIdx >= 0) app.setMidiOutDevice(midiOutIdx);
+    if (opts.audioInIdx >= 0) app.setAudioInDevice(opts.audioInIdx);
+    if (opts.audioOutIdx >= 0) app.setAudioOutDevice(opts.audioOutIdx);
+    if (opts.midiInIdx >= 0) app.setMidiInDevice(opts.midiInIdx);
+    if (opts.midiOutIdx >= 0) app.setMidiOutDevice(opts.midiOutIdx);
     
     if (!app.init()) return 1;
     app.run();
