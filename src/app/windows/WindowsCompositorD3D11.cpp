@@ -9,7 +9,7 @@ struct FxParams {
     UINT outWidth;
     UINT outHeight;
     UINT effectMode;
-    UINT pad0;
+    UINT hasFeedback;
     float p0;
     float p1;
     float panX;
@@ -20,8 +20,8 @@ struct FxParams {
     float audioRms;
     float bandLo;
     float bandHi;
+    float feedbackMix;
     float pad1;
-    float pad2;
 };
 
 struct CompositeParams {
@@ -44,8 +44,16 @@ UINT effectModeFromPatch(FxPatchId patch) {
         case FxPatchId::WaveDistort:return 4u;
         case FxPatchId::Strobe:    return 5u;
         case FxPatchId::Scanline:  return 6u;
+        case FxPatchId::FeedbackZoom:      return 7u;
+        case FxPatchId::EchoTrails:        return 8u;
+        case FxPatchId::Datamosh:          return 9u;
+        case FxPatchId::FeedbackTransform: return 10u;
         default:                   return 0u;
     }
+}
+
+bool isFeedbackMode(UINT mode) {
+    return mode >= 7u && mode <= 10u;
 }
 }
 
@@ -55,13 +63,14 @@ bool WindowsCompositorD3D11::init() {
 #if defined(_WIN32)
     static const char* kFxCs = R"(
 Texture2D<float4> srcTex : register(t0);
+Texture2D<float4> feedbackTex : register(t1);
 RWTexture2D<float4> fxTex : register(u0);
 
 cbuffer FxParams : register(b0) {
     uint outWidth;
     uint outHeight;
     uint effectMode;
-    uint pad0;
+    uint hasFeedback;
     float p0;
     float p1;
     float panX;
@@ -72,8 +81,8 @@ cbuffer FxParams : register(b0) {
     float audioRms;
     float bandLo;
     float bandHi;
+    float feedbackMix;
     float pad1;
-    float pad2;
 };
 
 [numthreads(8, 8, 1)]
@@ -107,6 +116,11 @@ void main(uint3 tid : SV_DispatchThreadID) {
     int2 sampleCoord = int2(sampledUv * (dim - 1.0));
 
     float4 c = srcTex[sampleCoord];
+    float4 fb = float4(0.0, 0.0, 0.0, 1.0);
+    if (hasFeedback != 0) {
+        fb = feedbackTex[sampleCoord];
+    }
+
     if (effectMode == 1) {
         float4 inv = float4(1.0 - c.rgb, c.a);
         c = lerp(c, inv, saturate(p0 * 2.0));
@@ -128,6 +142,38 @@ void main(uint3 tid : SV_DispatchThreadID) {
         float depth = saturate(0.15 + p0 * 0.75);
         float mask = lerp(1.0, line, depth);
         c.rgb *= mask;
+    } else if (effectMode == 7) {
+        float2 d = sampledUv - float2(0.5, 0.5);
+        float zoomBack = 1.0 - (0.01 + p0 * 0.08);
+        float2 fbUv = d * zoomBack + float2(0.5, 0.5);
+        fbUv += float2((p1 - 0.5) * 0.02, (bandHi - 0.5) * 0.01);
+        fbUv = saturate(fbUv);
+        int2 fbCoord = int2(fbUv * (dim - 1.0));
+        float4 fbZoom = (hasFeedback != 0) ? feedbackTex[fbCoord] : float4(0.0, 0.0, 0.0, 1.0);
+        c = lerp(c, fbZoom, saturate(0.25 + feedbackMix * 0.65));
+    } else if (effectMode == 8) {
+        c = lerp(c, fb, saturate(0.15 + feedbackMix * 0.75));
+    } else if (effectMode == 9) {
+        float2 shift = float2((bandHi - 0.5) * 0.01, (bandLo - 0.5) * 0.01) * (0.2 + p1);
+        float2 uvR = saturate(sampledUv + shift);
+        float2 uvB = saturate(sampledUv - shift);
+        int2 cR = int2(uvR * (dim - 1.0));
+        int2 cB = int2(uvB * (dim - 1.0));
+        float4 fr = (hasFeedback != 0) ? feedbackTex[cR] : c;
+        float4 fbv = (hasFeedback != 0) ? feedbackTex[cB] : c;
+        float4 glitch = float4(fr.r, fb.g, fbv.b, c.a);
+        c = lerp(c, glitch, saturate(0.3 + feedbackMix * 0.6));
+    } else if (effectMode == 10) {
+        float angle = (p1 - 0.5) * 1.6;
+        float cs2 = cos(-angle);
+        float sn2 = sin(-angle);
+        float2 d = sampledUv - float2(0.5, 0.5);
+        float2 rd = float2(d.x * cs2 - d.y * sn2, d.x * sn2 + d.y * cs2);
+        float2 fbUv = rd * (1.0 - p0 * 0.06) + float2(0.5, 0.5);
+        fbUv = saturate(fbUv);
+        int2 fbCoord = int2(fbUv * (dim - 1.0));
+        float4 fbT = (hasFeedback != 0) ? feedbackTex[fbCoord] : float4(0.0, 0.0, 0.0, 1.0);
+        c = lerp(c, fbT, saturate(0.2 + feedbackMix * 0.7));
     }
 
     float audioDrive = saturate(audioRms * audioGain);
@@ -257,6 +303,14 @@ void main(uint3 tid : SV_DispatchThreadID) {
         if (FAILED(hr)) return false;
     }
 
+    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    for (int i = 0; i < NUM_SRC_LAYERS; ++i) {
+        hr = device_->CreateTexture2D(&texDesc, nullptr, feedbackTex_[i].GetAddressOf());
+        if (FAILED(hr)) return false;
+        hr = device_->CreateShaderResourceView(feedbackTex_[i].Get(), &srvDesc, feedbackSrv_[i].GetAddressOf());
+        if (FAILED(hr)) return false;
+    }
+
     D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
     uavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
@@ -340,8 +394,11 @@ void main(uint3 tid : SV_DispatchThreadID) {
     for (int i = 0; i < NUM_SRC_LAYERS; ++i)
         uploadScratch_[i].assign(static_cast<size_t>(WORK_W) * static_cast<size_t>(WORK_H) * 4u, 0u);
 #if defined(_WIN32)
-    for (int i = 0; i < NUM_SRC_LAYERS; ++i)
+    for (int i = 0; i < NUM_SRC_LAYERS; ++i) {
         context_->UpdateSubresource(srcTex_[i].Get(), 0, nullptr, uploadScratch_[i].data(), WORK_W * 4, 0);
+        context_->UpdateSubresource(feedbackTex_[i].Get(), 0, nullptr, uploadScratch_[i].data(), WORK_W * 4, 0);
+        feedbackPrimed_[i] = false;
+    }
 #endif
     initialized_ = true;
     return true;
@@ -453,7 +510,16 @@ std::array<float, ICompositor::NUM_LIF_TONE_BINS> WindowsCompositorD3D11::sample
 
 void WindowsCompositorD3D11::beginCrossfade(int) {}
 void WindowsCompositorD3D11::setCrossfadeSpeed(int, float) {}
-void WindowsCompositorD3D11::resetFeedbackBuffers() {}
+void WindowsCompositorD3D11::resetFeedbackBuffers() {
+#if defined(_WIN32)
+    if (!initialized_) return;
+    for (int i = 0; i < NUM_SRC_LAYERS; ++i) {
+        std::fill(uploadScratch_[i].begin(), uploadScratch_[i].end(), 0u);
+        context_->UpdateSubresource(feedbackTex_[i].Get(), 0, nullptr, uploadScratch_[i].data(), WORK_W * 4, 0);
+        feedbackPrimed_[i] = false;
+    }
+#endif
+}
 
 bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
     if (!initialized_) return false;
@@ -466,11 +532,12 @@ bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
         const int bandBase = slot * 2;
         const float bandLo = audioBands_[bandBase];
         const float bandHi = audioBands_[bandBase + 1];
+        const UINT effectMode = effectModeFromPatch(fxPatches_[slot]);
         const FxParams fxParams = {
             static_cast<UINT>(WORK_W),
             static_cast<UINT>(WORK_H),
-            effectModeFromPatch(fxPatches_[slot]),
-            0,
+            effectMode,
+            feedbackPrimed_[slot] ? 1u : 0u,
             fxParams_[slot][0],
             fxParams_[slot][1],
             pan_[slot][0],
@@ -481,20 +548,30 @@ bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
             audioRms_,
             bandLo,
             bandHi,
-            0.0f,
+            std::clamp(0.25f + fxParams_[slot][0] * 0.65f, 0.0f, 1.0f),
             0.0f,
         };
         context_->UpdateSubresource(fxParamsCb_.Get(), 0, nullptr, &fxParams, 0, 0);
 
-        ID3D11ShaderResourceView* fxInputSrv[] = {srcSrv_[slot].Get()};
+        ID3D11ShaderResourceView* fxInputSrv[] = {srcSrv_[slot].Get(), feedbackSrv_[slot].Get()};
         ID3D11UnorderedAccessView* fxOutputUav[] = {fxUav_[slot].Get()};
         ID3D11Buffer* fxCb[] = {fxParamsCb_.Get()};
 
         context_->CSSetShader(fxCs_.Get(), nullptr, 0);
-        context_->CSSetShaderResources(0, 1, fxInputSrv);
+        context_->CSSetShaderResources(0, 2, fxInputSrv);
         context_->CSSetUnorderedAccessViews(0, 1, fxOutputUav, nullptr);
         context_->CSSetConstantBuffers(0, 1, fxCb);
         context_->Dispatch(groupsX, groupsY, 1);
+
+        ID3D11ShaderResourceView* nullFxSrv[] = {nullptr, nullptr};
+        ID3D11UnorderedAccessView* nullFxUav[] = {nullptr};
+        context_->CSSetShaderResources(0, 2, nullFxSrv);
+        context_->CSSetUnorderedAccessViews(0, 1, nullFxUav, nullptr);
+
+        if (isFeedbackMode(effectMode)) {
+            context_->CopyResource(feedbackTex_[slot].Get(), fxTex_[slot].Get());
+            feedbackPrimed_[slot] = true;
+        }
     }
 
     ID3D11ShaderResourceView* nullSrv[] = {nullptr, nullptr, nullptr};

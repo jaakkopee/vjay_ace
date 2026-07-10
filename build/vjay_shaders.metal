@@ -1207,7 +1207,7 @@ kernel void lif_replace(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  AUX EFFECTS (from src/app/shaders/aux/)
+//  AUX EFFECTS (from src/app/shaders/effects/)
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Shared helpers used by aux kernels ───────────────────────────────────────

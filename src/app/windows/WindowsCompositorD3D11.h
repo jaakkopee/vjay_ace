@@ -68,10 +68,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
     std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>, NUM_SRC_LAYERS> srcTex_;
     std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>, NUM_SRC_LAYERS> fxTex_;
+    std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>, NUM_SRC_LAYERS> feedbackTex_;
     Microsoft::WRL::ComPtr<ID3D11Texture2D> compositeTex_;
     Microsoft::WRL::ComPtr<ID3D11Texture2D> readbackTex_;
     std::array<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>, NUM_SRC_LAYERS> srcSrv_;
     std::array<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>, NUM_SRC_LAYERS> fxSrv_;
+    std::array<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>, NUM_SRC_LAYERS> feedbackSrv_;
     std::array<Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView>, NUM_SRC_LAYERS> fxUav_;
     Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView> compositeUav_;
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> fxCs_;
@@ -81,4 +83,5 @@ private:
 #endif
 
     std::array<std::vector<uint8_t>, NUM_SRC_LAYERS> uploadScratch_;
+    std::array<bool, NUM_SRC_LAYERS> feedbackPrimed_ = {false, false, false};
 };
