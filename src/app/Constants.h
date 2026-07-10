@@ -41,8 +41,8 @@ inline constexpr int NOTE_SCENE_BASE = 36;   // C2
 inline constexpr int NUM_SCENES      = 32;
 
 // ── Knob value range ────────────────────────────────────────────────────────
-inline constexpr int CC_MIN = 0;
-inline constexpr int CC_MAX = 127;
+inline constexpr int MIDI_CC_MIN = 0;
+inline constexpr int MIDI_CC_MAX = 127;
 inline float ccToNorm(int cc) { return static_cast<float>(cc) / 127.0f; }
 
 // ── FX parameter slots ──────────────────────────────────────────────────────

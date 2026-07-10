@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "../CompositorFactory.h"
+#include "../ICompositor.h"
 
 int main() {
     auto compositor = createCompositor();
