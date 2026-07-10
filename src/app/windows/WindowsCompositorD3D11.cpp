@@ -302,6 +302,8 @@ void main(uint3 tid : SV_DispatchThreadID) {
         hr = device_->CreateShaderResourceView(fxTex_[i].Get(), &srvDesc, fxSrv_[i].GetAddressOf());
         if (FAILED(hr)) return false;
     }
+    hr = device_->CreateShaderResourceView(compositeTex_.Get(), &srvDesc, compositeSrv_.GetAddressOf());
+    if (FAILED(hr)) return false;
 
     texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     for (int i = 0; i < NUM_SRC_LAYERS; ++i) {
@@ -521,9 +523,7 @@ void WindowsCompositorD3D11::resetFeedbackBuffers() {
 #endif
 }
 
-bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
-    if (!initialized_) return false;
-
+void WindowsCompositorD3D11::runGPUPasses() {
 #if defined(_WIN32)
     const UINT groupsX = static_cast<UINT>((WORK_W + 7) / 8);
     const UINT groupsY = static_cast<UINT>((WORK_H + 7) / 8);
@@ -591,7 +591,7 @@ bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
     };
     context_->UpdateSubresource(compositeParamsCb_.Get(), 0, nullptr, &compositeParams, 0, 0);
 
-    ID3D11ShaderResourceView* compositeSrv[] = {
+    ID3D11ShaderResourceView* fxLayerSrv[] = {
         fxSrv_[0].Get(),
         fxSrv_[1].Get(),
         fxSrv_[2].Get(),
@@ -599,7 +599,7 @@ bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
     ID3D11UnorderedAccessView* compositeUav[] = {compositeUav_.Get()};
     ID3D11Buffer* compositeCb[] = {compositeParamsCb_.Get()};
     context_->CSSetShader(compositeCs_.Get(), nullptr, 0);
-    context_->CSSetShaderResources(0, 3, compositeSrv);
+    context_->CSSetShaderResources(0, 3, fxLayerSrv);
     context_->CSSetUnorderedAccessViews(0, 1, compositeUav, nullptr);
     context_->CSSetConstantBuffers(0, 1, compositeCb);
     context_->Dispatch(groupsX, groupsY, 1);
@@ -607,6 +607,14 @@ bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
     context_->CSSetShaderResources(0, 3, nullSrv);
     context_->CSSetUnorderedAccessViews(0, 1, nullUav, nullptr);
     context_->CSSetShader(nullptr, nullptr, 0);
+#endif
+}
+
+bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
+    if (!initialized_) return false;
+
+#if defined(_WIN32)
+    runGPUPasses();
 
     context_->CopyResource(readbackTex_.Get(), compositeTex_.Get());
 
@@ -627,4 +635,143 @@ bool WindowsCompositorD3D11::composite(std::vector<uint8_t>& outRGBA) {
 #endif
 
     return true;
+}
+
+bool WindowsCompositorD3D11::initSwapChain(HWND hwnd, int windowW, int windowH) {
+#if defined(_WIN32)
+    if (!initialized_) return false;
+
+    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+    HRESULT hr = device_.As(&dxgiDevice);
+    if (FAILED(hr)) return false;
+
+    Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+    hr = dxgiDevice->GetAdapter(adapter.GetAddressOf());
+    if (FAILED(hr)) return false;
+
+    Microsoft::WRL::ComPtr<IDXGIFactory> factory;
+    hr = adapter->GetParent(IID_PPV_ARGS(factory.GetAddressOf()));
+    if (FAILED(hr)) return false;
+
+    DXGI_SWAP_CHAIN_DESC sd = {};
+    sd.BufferCount                        = 2;
+    sd.BufferDesc.Width                   = static_cast<UINT>(windowW);
+    sd.BufferDesc.Height                  = static_cast<UINT>(windowH);
+    sd.BufferDesc.Format                  = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferDesc.RefreshRate.Numerator   = 60;
+    sd.BufferDesc.RefreshRate.Denominator = 1;
+    sd.BufferUsage                        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.OutputWindow                       = hwnd;
+    sd.SampleDesc.Count                   = 1;
+    sd.Windowed                           = TRUE;
+    sd.SwapEffect                         = DXGI_SWAP_EFFECT_DISCARD;
+
+    hr = factory->CreateSwapChain(device_.Get(), &sd, swapChain_.GetAddressOf());
+    if (FAILED(hr)) return false;
+
+    // Prevent DXGI from swallowing Alt+Enter
+    factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
+
+    swapW_ = windowW;
+    swapH_ = windowH;
+
+    // Compile a fullscreen-triangle blit VS + PS
+    static const char* kBlitSrc = R"(
+Texture2D<float4> tex  : register(t0);
+SamplerState      samp : register(s0);
+
+void VSMain(uint id : SV_VertexID,
+            out float4 pos : SV_POSITION,
+            out float2 uv  : TEXCOORD0)
+{
+    uv  = float2((id & 1u) * 2.0f, (id >> 1u) * 2.0f);
+    pos = float4(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f, 0.0f, 1.0f);
+}
+
+float4 PSMain(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET
+{
+    return tex.Sample(samp, uv);
+}
+    )";
+
+    Microsoft::WRL::ComPtr<ID3DBlob> blob, errBlob;
+    hr = D3DCompile(kBlitSrc, std::strlen(kBlitSrc), nullptr, nullptr, nullptr,
+                    "VSMain", "vs_5_0", 0, 0, blob.GetAddressOf(), errBlob.GetAddressOf());
+    if (FAILED(hr)) return false;
+    hr = device_->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(),
+                                     nullptr, blitVs_.GetAddressOf());
+    if (FAILED(hr)) return false;
+
+    blob.Reset(); errBlob.Reset();
+    hr = D3DCompile(kBlitSrc, std::strlen(kBlitSrc), nullptr, nullptr, nullptr,
+                    "PSMain", "ps_5_0", 0, 0, blob.GetAddressOf(), errBlob.GetAddressOf());
+    if (FAILED(hr)) return false;
+    hr = device_->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(),
+                                    nullptr, blitPs_.GetAddressOf());
+    if (FAILED(hr)) return false;
+
+    D3D11_SAMPLER_DESC sampDesc = {};
+    sampDesc.Filter   = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampDesc.MaxLOD   = D3D11_FLOAT32_MAX;
+    hr = device_->CreateSamplerState(&sampDesc, linearSampler_.GetAddressOf());
+    if (FAILED(hr)) return false;
+
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool WindowsCompositorD3D11::presentToWindow() {
+    if (!initialized_ || !swapChain_) return false;
+
+#if defined(_WIN32)
+    runGPUPasses();
+
+    // Get back buffer and create a temporary RTV for this frame
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuf;
+    HRESULT hr = swapChain_->GetBuffer(0, IID_PPV_ARGS(backBuf.GetAddressOf()));
+    if (FAILED(hr)) return false;
+
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
+    hr = device_->CreateRenderTargetView(backBuf.Get(), nullptr, rtv.GetAddressOf());
+    if (FAILED(hr)) return false;
+
+    D3D11_VIEWPORT vp = {};
+    vp.Width    = static_cast<float>(swapW_);
+    vp.Height   = static_cast<float>(swapH_);
+    vp.MaxDepth = 1.0f;
+    context_->RSSetViewports(1, &vp);
+
+    ID3D11RenderTargetView* rtvs[] = {rtv.Get()};
+    context_->OMSetRenderTargets(1, rtvs, nullptr);
+
+    context_->VSSetShader(blitVs_.Get(), nullptr, 0);
+    context_->PSSetShader(blitPs_.Get(), nullptr, 0);
+
+    ID3D11ShaderResourceView* srvs[] = {compositeSrv_.Get()};
+    context_->PSSetShaderResources(0, 1, srvs);
+
+    ID3D11SamplerState* samps[] = {linearSampler_.Get()};
+    context_->PSSetSamplers(0, 1, samps);
+
+    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context_->IASetInputLayout(nullptr);
+    context_->Draw(3, 0);
+
+    // Clear pipeline state
+    ID3D11ShaderResourceView* nullSrv[] = {nullptr};
+    context_->PSSetShaderResources(0, 1, nullSrv);
+    context_->OMSetRenderTargets(0, nullptr, nullptr);
+    context_->VSSetShader(nullptr, nullptr, 0);
+    context_->PSSetShader(nullptr, nullptr, 0);
+
+    swapChain_->Present(1, 0);
+    return true;
+#else
+    return false;
+#endif
 }

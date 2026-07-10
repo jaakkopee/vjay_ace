@@ -39,7 +39,16 @@ public:
     void resetFeedbackBuffers() override;
     bool composite(std::vector<uint8_t>& outRGBA) override;
 
+    // Window presentation — call after init(). Creates a DXGI swap chain for
+    // the given HWND at the specified preview dimensions.
+    bool initSwapChain(HWND hwnd, int windowW, int windowH);
+    // Runs the GPU compute passes and blits the result to the swap chain.
+    // Returns false if no swap chain has been initialized.
+    bool presentToWindow();
+
 private:
+    void runGPUPasses(); // shared by composite() and presentToWindow()
+
     bool initialized_ = false;
 
     std::array<std::array<float, 2>, NUM_SRC_LAYERS> pan_ = {};
@@ -80,6 +89,14 @@ private:
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> compositeCs_;
     Microsoft::WRL::ComPtr<ID3D11Buffer> fxParamsCb_;
     Microsoft::WRL::ComPtr<ID3D11Buffer> compositeParamsCb_;
+    // Swap chain + blit pipeline (populated by initSwapChain)
+    Microsoft::WRL::ComPtr<IDXGISwapChain>              swapChain_;
+    Microsoft::WRL::ComPtr<ID3D11VertexShader>          blitVs_;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader>           blitPs_;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState>          linearSampler_;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>    compositeSrv_;
+    int swapW_ = 0;
+    int swapH_ = 0;
 #endif
 
     std::array<std::vector<uint8_t>, NUM_SRC_LAYERS> uploadScratch_;
