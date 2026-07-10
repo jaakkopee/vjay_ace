@@ -1,5 +1,6 @@
 #pragma once
 #include "Constants.h"
+#include "ICompositor.h"
 #include "LIFNetwork.h"
 #include <Metal/Metal.h>
 #include <cstdint>
@@ -22,76 +23,71 @@
 //   layer 6  (src)   ─── top source, composited over FX groups
 //   → final blend of 4 processed groups with individual opacities
 
-class MetalCompositor {
+class MetalCompositor : public ICompositor {
 public:
     MetalCompositor();
     ~MetalCompositor();
 
     // Must be called once before any render calls.
     // Returns false if Metal is not available.
-    bool init();
+    bool init() override;
 
     // Upload a CPU pixel buffer (RGBA8) into layer slot idx.
     // Called each frame for video layers; less often for static images.
     void uploadLayerPixels(int layerIdx,
                            const uint8_t* rgba,
-                           int width, int height);
+                           int width, int height) override;
 
     // Set the FX patch to run on a given odd-index (FX) layer.
     // The FX kernel reads from the processed source below and writes to its slot.
-    void setFxPatch(int fxLayerIdx, FxPatchId patch);
+    void setFxPatch(int fxLayerIdx, FxPatchId patch) override;
 
     // Set per-FX float params (2 per FX layer).
-    void setFxParams(int fxLayerIdx, float p0, float p1);
+    void setFxParams(int fxLayerIdx, float p0, float p1) override;
 
     // Set layer opacity (0.0–1.0).
-    void setLayerOpacity(int layerIdx, float opacity);
+    void setLayerOpacity(int layerIdx, float opacity) override;
 
     // Set rotation (radians) for a source layer slot (0=layer0, 1=layer2, 2=layer4).
-    void setLayerRotation(int srcSlot, float radians);
+    void setLayerRotation(int srcSlot, float radians) override;
 
     // Set zoom factor for a source layer slot (1.0 = no zoom; >1 = zoom in; <1 = zoom out).
-    void setLayerZoom(int srcSlot, float factor);
+    void setLayerZoom(int srcSlot, float factor) override;
 
     // Set pan offset for a source layer slot.
     // offset is a fraction of the frame: -1.0 = full left/up, +1.0 = full right/down, 0.0 = centre.
-    void setLayerPanX(int srcSlot, float offset);
-    void setLayerPanY(int srcSlot, float offset);
+    void setLayerPanX(int srcSlot, float offset) override;
+    void setLayerPanY(int srcSlot, float offset) override;
 
     // Get current pan and zoom values for a source layer slot.
-    void getLayerPan(int srcSlot, float& outOffsetX, float& outOffsetY) const;
-    float getLayerZoom(int srcSlot) const;
+    void getLayerPan(int srcSlot, float& outOffsetX, float& outOffsetY) const override;
+    float getLayerZoom(int srcSlot) const override;
 
     // Set audio band magnitudes (0.0-1.0 each).  Call each frame from the main thread.
     // Bands are packed into float_params[8..15] of every FX ShaderParams dispatch.
-    void setAudioBands(const float* bands, int count, float rms);
+    void setAudioBands(const float* bands, int count, float rms) override;
 
     // Set per-FX audio gain multiplier (applied to bands+RMS before shader injection).
-    void setAudioGain(int fxSlot, float gain);
+    void setAudioGain(int fxSlot, float gain) override;
 
-    void setLIFTopology(LIFNetwork::Topology topology);
-    void setLIFNeuronCount(int neuronCount);
-    struct LIFDriver {
-        int srcSlot = 0;
-        float influenceNorm = 0.5f;
-        float topologyNorm = 0.0f;
-    };
-    void setLIFDrivers(const std::vector<LIFDriver>& drivers);
-    std::array<float, LIFNetwork::NUM_TONE_BINS> sampleLIFColumn(float phase01) const;
+    void setLIFTopology(ICompositor::LIFTopology topology) override;
+    void setLIFNeuronCount(int neuronCount) override;
+    void setLIFDrivers(const std::vector<ICompositor::LIFDriver>& drivers) override;
+    std::array<float, ICompositor::NUM_LIF_TONE_BINS> sampleLIFColumn(float phase01) const override;
 
     // Begin a crossfade for a source slot — call BEFORE uploading the new image.
     // Captures the current frame and resets the blend progress to 0.
-    void beginCrossfade(int srcSlot);
+    void beginCrossfade(int srcSlot) override;
 
     // Set how long (in seconds) a crossfade takes for a source slot (0.1–8.0).
-    void setCrossfadeSpeed(int srcSlot, float seconds);
+    void setCrossfadeSpeed(int srcSlot, float seconds) override;
 
-    void resetFeedbackBuffers();
+    void resetFeedbackBuffers() override;
 
     // Composite all layers into outputTexture and return a CPU RGBA8 snapshot
     // at WORK_W x WORK_H for blit into the SFML window.
     // Returns false if not initialised.
-    bool composite(std::vector<uint8_t>& outRGBA);
+    bool composite(std::vector<uint8_t>& outRGBA) override;
 
     // Params buffer layout shared with Metal kernels.
     // Mirrors MachinaVFX convention: int_params[16], float_params[16].
@@ -199,7 +195,7 @@ private:
     std::array<float, 8> audioBands_ = {};
     float audioRms_ = 0.0f;
     std::array<float, NUM_FX_LAYERS> audioGain_ = {1.0f, 1.0f, 1.0f};
-    std::array<LIFDriver, NUM_FX_LAYERS> lifDrivers_ = {};
+    std::array<ICompositor::LIFDriver, NUM_FX_LAYERS> lifDrivers_ = {};
     int lifDriverCount_ = 0;
     std::unique_ptr<LIFNetwork> lifNetwork_;
 

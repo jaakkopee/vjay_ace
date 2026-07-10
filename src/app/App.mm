@@ -1,4 +1,5 @@
 #include "App.h"
+#include "CompositorFactory.h"
 #import  <AppKit/AppKit.h>  // NSScreen for display positions
 #include <iostream>
 #include <fstream>
@@ -49,13 +50,13 @@ static int topologyIndexFromNorm(float value) {
     return std::clamp(static_cast<int>(value * 5.0f), 0, 4);
 }
 
-static LIFNetwork::Topology topologyFromIndex(int index) {
+static ICompositor::LIFTopology topologyFromIndex(int index) {
     switch (std::clamp(index, 0, 4)) {
-        case 0: return LIFNetwork::Topology::Ring;
-        case 1: return LIFNetwork::Topology::FullyConnected;
-        case 2: return LIFNetwork::Topology::Feedforward;
-        case 3: return LIFNetwork::Topology::SparseRandom;
-        default: return LIFNetwork::Topology::SmallWorld;
+        case 0: return ICompositor::LIFTopology::Ring;
+        case 1: return ICompositor::LIFTopology::FullyConnected;
+        case 2: return ICompositor::LIFTopology::Feedforward;
+        case 3: return ICompositor::LIFTopology::SparseRandom;
+        default: return ICompositor::LIFTopology::SmallWorld;
     }
 }
 
@@ -115,7 +116,8 @@ float App::normFromLIFNeuronCount(int neuronCount) {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
-App::App() = default;
+App::App()
+    : compositor_(createCompositor()) {}
 App::~App() {
     lifToneSynth_.stopStream();
 }
@@ -390,7 +392,7 @@ bool App::init() {
     std::signal(SIGTERM, appSigHandler);
 
     // ── Metal compositor ─────────────────────────────────────────────────
-    if (!compositor_.init()) {
+    if (!compositor_ || !compositor_->init()) {
         std::cerr << "[App] Metal compositor init failed — GPU unavailable\n";
         // Continue in "software preview" mode (no compositing)
     }
@@ -768,7 +770,7 @@ void App::wireCallbacks() {
         // Zero out bands in compositor immediately when bypass toggles on
         if (bypassed) {
             const float zeros[8] = {};
-            compositor_.setAudioBands(zeros, 8, 0.0f);
+            compositor_->setAudioBands(zeros, 8, 0.0f);
         }
     };
     controlWin_.onLIFToneToggle = [this]() {
@@ -822,36 +824,36 @@ void App::applyKnob(int knobIdx, float v, KnobMode mode) {
                 int slot    = knobIdx / 2;     // 0→1, 2→3, 4→5
                 int fxLayer = slot * 2 + 1;
                 layers_.setOpacity(fxLayer, v);
-                compositor_.setLayerOpacity(fxLayer, v);
+                compositor_->setLayerOpacity(fxLayer, v);
             }
             break;
         case KnobMode::FxAudio:
             if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_FX_LAYERS)
-                compositor_.setAudioGain(knobIdx / 2, v * 8.0f);  // 0.0–8.0x gain (stronger response)
+                compositor_->setAudioGain(knobIdx / 2, v * 8.0f);  // 0.0–8.0x gain (stronger response)
             break;
         case KnobMode::FxParam: {
             int slot = knobIdx / 2, param = knobIdx % 2;
             if (slot < NUM_FX_LAYERS) {
                 fxPatches_[slot].p[param] = v;
-                compositor_.setFxParams(slot, fxPatches_[slot].p[0], fxPatches_[slot].p[1]);
+                compositor_->setFxParams(slot, fxPatches_[slot].p[0], fxPatches_[slot].p[1]);
             }
             break;
         }
         case KnobMode::ImgRotate:
             if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS)
-                compositor_.setLayerRotation(knobIdx / 2, v * 2.0f * 3.14159265f);
+                compositor_->setLayerRotation(knobIdx / 2, v * 2.0f * 3.14159265f);
             break;
         case KnobMode::ImgZoom:
             if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS)
-                compositor_.setLayerZoom(knobIdx / 2, std::pow(64.0f, v - 0.5f)); // 0.125x .. 8.0x
+                compositor_->setLayerZoom(knobIdx / 2, std::pow(64.0f, v - 0.5f)); // 0.125x .. 8.0x
             break;
         case KnobMode::ImgPan: {
             int slot = knobIdx / 2;  // knob pair: 0/1→slot0, 2/3→slot1, 4/5→slot2
             bool isY = (knobIdx % 2 == 1);
             if (slot < NUM_SRC_LAYERS) {
                 float offset = (v - 0.5f) * 2.0f;  // −1.0 (left/up) .. +1.0 (right/down)
-                if (isY) compositor_.setLayerPanY(slot, offset);
-                else     compositor_.setLayerPanX(slot, offset);
+                if (isY) compositor_->setLayerPanY(slot, offset);
+                else     compositor_->setLayerPanX(slot, offset);
             }
             break;
         }
@@ -944,7 +946,7 @@ void App::ensureSceneLIFDefaults(int idx) {
 void App::applySceneCrossfadeSettings(int idx) {
     if (idx < 0 || idx >= NUM_SCENES) return;
     for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot)
-        compositor_.setCrossfadeSpeed(slot, 0.1f + effectiveImageCrossfadeNorm(idx, slot) * 7.9f);
+        compositor_->setCrossfadeSpeed(slot, 0.1f + effectiveImageCrossfadeNorm(idx, slot) * 7.9f);
 }
 
 float App::effectiveImageCrossfadeNorm(int sceneIdx, int slot) const {
@@ -1085,8 +1087,8 @@ void App::applySceneToEngine(int idx) {
     ensureSceneAudioGainDefaults(idx);
     ensureSceneLIFDefaults(idx);
     applySceneCrossfadeSettings(idx);
-    compositor_.setLIFTopology(topologyFromIndex(scenes_[idx].lifTopologyIndex));
-    compositor_.setLIFNeuronCount(scenes_[idx].lifNeuronCount);
+    compositor_->setLIFTopology(topologyFromIndex(scenes_[idx].lifTopologyIndex));
+    compositor_->setLIFNeuronCount(scenes_[idx].lifNeuronCount);
     const SceneState& s = scenes_[idx];
 
     // Layer opacity is scene-local by default and can be globally overridden.
@@ -1182,7 +1184,7 @@ void App::applyPressureMappings(int sceneIdx) {
         p1 = modulated(19 + slot * 2, p1);
         fxPatches_[slot].p[0] = p0;
         fxPatches_[slot].p[1] = p1;
-        compositor_.setFxParams(slot, p0, p1);
+        compositor_->setFxParams(slot, p0, p1);
     }
 }
 
@@ -1347,7 +1349,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             setGlobalImageCrossfadeNorm(slot, normValue);
-            compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
+            compositor_->setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
             controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         }
         return;
@@ -1420,7 +1422,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             setLocalImageCrossfadeNorm(currentScene_, slot, normValue);
-            compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
+            compositor_->setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
             controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         }
         return;
@@ -1450,7 +1452,7 @@ void App::onKnob(int knobIdx, float normValue, KnobMode mode) {
         int slot = knobIdx / 2;
         if (slot < NUM_FX_LAYERS && isLIFPatch(SCENES[currentScene_].fx[slot])) {
             scenes_[currentScene_].lifTopologyIndex = topologyIndexFromNorm(normValue);
-            compositor_.setLIFTopology(topologyFromIndex(scenes_[currentScene_].lifTopologyIndex));
+            compositor_->setLIFTopology(topologyFromIndex(scenes_[currentScene_].lifTopologyIndex));
             controlWin_.setKnobTopoName(knobIdx, topologyIndexToName(scenes_[currentScene_].lifTopologyIndex));
         }
     }
@@ -1475,12 +1477,12 @@ void App::startPanZoomAnimation() {
     
     for (int slot = 0; slot < NUM_SRC_LAYERS; ++slot) {
         // Current pan values from compositor
-        compositor_.getLayerPan(slot, panXFrom_[slot], panYFrom_[slot]);
+        compositor_->getLayerPan(slot, panXFrom_[slot], panYFrom_[slot]);
         panXTo_[slot] = (scenes_[currentScene_].knobs[panMi][slot * 2] - 0.5f) * 2.0f;
         panYTo_[slot] = (scenes_[currentScene_].knobs[panMi][slot * 2 + 1] - 0.5f) * 2.0f;
         
         // Current zoom value from compositor
-        zoomFrom_[slot] = compositor_.getLayerZoom(slot);
+        zoomFrom_[slot] = compositor_->getLayerZoom(slot);
         float zoomNorm = scenes_[currentScene_].knobs[zoomMi][slot * 2];
         zoomTo_[slot] = zoomNorm >= 0.0f ? std::pow(64.0f, zoomNorm - 0.5f) : 1.0f;
     }
@@ -1516,16 +1518,16 @@ void App::updatePanZoomAnimation(float deltaTime) {
         float panY = panYFrom_[slot] + (panYTo_[slot] - panYFrom_[slot]) * eased;
         float zoom = zoomFrom_[slot] + (zoomTo_[slot] - zoomFrom_[slot]) * eased;
         
-        compositor_.setLayerPanX(slot, panX);
-        compositor_.setLayerPanY(slot, panY);
-        compositor_.setLayerZoom(slot, zoom);
+        compositor_->setLayerPanX(slot, panX);
+        compositor_->setLayerPanY(slot, panY);
+        compositor_->setLayerZoom(slot, zoom);
     }
     
     // Animate FX layer opacities.
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
         float opacity = opacityFrom_[slot] + (opacityTo_[slot] - opacityFrom_[slot]) * eased;
         layers_.setOpacity(slot * 2 + 1, opacity);
-        compositor_.setLayerOpacity(slot * 2 + 1, opacity);
+        compositor_->setLayerOpacity(slot * 2 + 1, opacity);
     }
 }
 
@@ -1548,12 +1550,12 @@ void App::onSceneSelect(int sceneIdx) {
     currentScene_ = sceneIdx;
     const Scene& sc = SCENES[sceneIdx];
 
-    compositor_.resetFeedbackBuffers();
+    compositor_->resetFeedbackBuffers();
 
     // 1. Apply the scene's FX patch selection.
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
         fxPatches_[slot].id = sc.fx[slot];
-        compositor_.setFxPatch(slot, sc.fx[slot]);
+        compositor_->setFxPatch(slot, sc.fx[slot]);
         layers_.setFxPatch(slot * 2 + 1, sc.fx[slot]);
         mediaPickerWin_.setLayerEffect(slot * 2 + 1, sc.fx[slot]);
     }
@@ -1576,8 +1578,8 @@ void App::onSceneSelect(int sceneIdx) {
         if (!path.empty()) {
             if (changed) {
                 // Scene-triggered image swaps use image-load crossfade (local F or global I override).
-                compositor_.setCrossfadeSpeed(slot, 0.1f + effectiveImageCrossfadeNorm(sceneIdx, slot) * 7.9f);
-                compositor_.beginCrossfade(slot);
+                compositor_->setCrossfadeSpeed(slot, 0.1f + effectiveImageCrossfadeNorm(sceneIdx, slot) * 7.9f);
+                compositor_->beginCrossfade(slot);
             }
             // Always reload scene media so selecting a scene can reset slot playback,
             // even when the path is unchanged from the previous scene.
@@ -1630,7 +1632,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             setGlobalImageCrossfadeNorm(slot, normValue);
-            compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
+            compositor_->setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
         }
         controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         return;
@@ -1695,7 +1697,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         if (knobIdx % 2 == 0 && knobIdx / 2 < NUM_SRC_LAYERS) {
             int slot = knobIdx / 2;
             setLocalImageCrossfadeNorm(currentScene_, slot, normValue);
-            compositor_.setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
+            compositor_->setCrossfadeSpeed(slot, 0.1f + normValue * 7.9f); // 0.1–8.0 s
         }
         controlWin_.setKnobValue(knobIdx, static_cast<int>(normValue * 127.0f));
         return;
@@ -1726,7 +1728,7 @@ void App::onKnobDrag(int knobIdx, float normValue) {
         int slot = knobIdx / 2;
         if (slot < NUM_FX_LAYERS && isLIFPatch(SCENES[currentScene_].fx[slot])) {
             scenes_[currentScene_].lifTopologyIndex = topologyIndexFromNorm(normValue);
-            compositor_.setLIFTopology(topologyFromIndex(scenes_[currentScene_].lifTopologyIndex));
+            compositor_->setLIFTopology(topologyFromIndex(scenes_[currentScene_].lifTopologyIndex));
             controlWin_.setKnobTopoName(knobIdx, topologyIndexToName(scenes_[currentScene_].lifTopologyIndex));
         }
     }
@@ -1747,13 +1749,13 @@ void App::onImageSelected(int slotIdx, const std::string& path) {
 
     if (currentScene_ >= 0) {
         scenes_[currentScene_].imgPaths[slotIdx] = path;
-        compositor_.setCrossfadeSpeed(slotIdx,
+        compositor_->setCrossfadeSpeed(slotIdx,
                                       0.1f + effectiveImageCrossfadeNorm(currentScene_, slotIdx) * 7.9f);
     }
     // Reloading the exact same file should reset playback in that slot.
     // Only use visual crossfade when the incoming path differs.
     if (!samePathAsLoaded)
-        compositor_.beginCrossfade(slotIdx);  // capture current frame before new image uploads
+        compositor_->beginCrossfade(slotIdx);  // capture current frame before new image uploads
 
     layers_.loadMedia(layerIdx, path);
     saveState();  // persist immediately — don't rely on clean exit
@@ -1772,7 +1774,7 @@ void App::onEffectSelected(int fxLayerIdx, FxPatchId patch) {
 
     // Update the compositor
     fxPatches_[fxSlot].id = patch;
-    compositor_.setFxPatch(fxLayerIdx, patch);
+    compositor_->setFxPatch(fxLayerIdx, patch);
 
     // Update the mediaPickerWindow to reflect the selection
     mediaPickerWin_.setLayerEffect(fxLayerIdx, patch);
@@ -1953,7 +1955,7 @@ void App::loadState() {
         const Scene& sc = SCENES[currentScene_];
         for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
             fxPatches_[slot].id = sc.fx[slot];
-            compositor_.setFxPatch(slot, sc.fx[slot]);
+            compositor_->setFxPatch(slot, sc.fx[slot]);
             layers_.setFxPatch(slot * 2 + 1, sc.fx[slot]);
         }
         controlWin_.setSceneName(sc.name);
@@ -1977,16 +1979,16 @@ void App::loadState() {
 void App::uploadLayers() {
     for (int li = 0; li < NUM_LAYERS; li += 2) {
         const uint8_t* px = layers_.pixelBuffer(li);
-        if (px) compositor_.uploadLayerPixels(li, px, WORK_W, WORK_H);
+        if (px) compositor_->uploadLayerPixels(li, px, WORK_W, WORK_H);
     }
 }
 
 void App::syncCompositorState() {
     for (int li = 0; li < NUM_LAYERS; ++li)
-        compositor_.setLayerOpacity(li, layers_.state(li).opacity);
+        compositor_->setLayerOpacity(li, layers_.state(li).opacity);
     for (int slot = 0; slot < NUM_FX_LAYERS; ++slot) {
-        compositor_.setFxPatch(slot, fxPatches_[slot].id);
-        compositor_.setFxParams(slot, fxPatches_[slot].p[0], fxPatches_[slot].p[1]);
+        compositor_->setFxPatch(slot, fxPatches_[slot].id);
+        compositor_->setFxParams(slot, fxPatches_[slot].p[0], fxPatches_[slot].p[1]);
     }
 }
 
@@ -2021,17 +2023,17 @@ void App::processFrame() {
     if (!audioBypassed_ && audio_.isRunning()) {
         auto bands = audio_.bands();
         float rms  = audio_.rms();
-        compositor_.setAudioBands(bands.data(), static_cast<int>(bands.size()), rms);
+        compositor_->setAudioBands(bands.data(), static_cast<int>(bands.size()), rms);
         controlWin_.setAudioBands(bands.data(), static_cast<int>(bands.size()), rms);
     } else {
         const float zeros[8] = {};
-        compositor_.setAudioBands(zeros, 8, 0.0f);
+        compositor_->setAudioBands(zeros, 8, 0.0f);
         controlWin_.setAudioBands(zeros, 8, 0.0f);
     }
 
     // Drive LIF simulation from all active scene LIF patch params.
     if (currentScene_ >= 0) {
-        std::vector<MetalCompositor::LIFDriver> drivers;
+        std::vector<ICompositor::LIFDriver> drivers;
         const int fxMi = static_cast<int>(KnobMode::FxParam);
         const SceneState& s = scenes_[currentScene_];
         const Scene& sc = SCENES[currentScene_];
@@ -2043,13 +2045,13 @@ void App::processFrame() {
             const float topology = (p1Stored >= 0.0f) ? p1Stored : sc.params[slot][1];
             drivers.push_back({slot, influence, topology});
         }
-        compositor_.setLIFDrivers(drivers);
+        compositor_->setLIFDrivers(drivers);
     } else {
-        compositor_.setLIFDrivers({});
+        compositor_->setLIFDrivers({});
     }
 
     // GPU composite → CPU readback
-    if (compositor_.composite(compositePixels_)) {
+    if (compositor_->composite(compositePixels_)) {
         // Experimental sonification: horizontal scan = time, vertical bins = pitch.
         std::array<float, 16> lifBins = {};
         const bool lifSceneActive = sceneUsesLIF(currentScene_);
@@ -2059,7 +2061,7 @@ void App::processFrame() {
                 lifToneScanPhase_ -= std::floor(lifToneScanPhase_);
         }
         if (lifSceneActive) {
-            lifBins = compositor_.sampleLIFColumn(lifToneScanPhase_);
+            lifBins = compositor_->sampleLIFColumn(lifToneScanPhase_);
         }
         if (lifToneEnabled_ && !audioBypassed_ && lifSceneActive) {
             lifToneSynth_.setColumnEnergies(lifBins);

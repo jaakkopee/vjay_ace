@@ -179,6 +179,14 @@ src/app/CapsLockDetector.mm.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/CapsLockDetector.mm.o
 .PHONY : src/app/CapsLockDetector.mm.o
 
+src/app/CompositorFactory.o: src/app/CompositorFactory.mm.o
+.PHONY : src/app/CompositorFactory.o
+
+# target to build an object file
+src/app/CompositorFactory.mm.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/vjay_ace.dir/build.make CMakeFiles/vjay_ace.dir/src/app/CompositorFactory.mm.o
+.PHONY : src/app/CompositorFactory.mm.o
+
 src/app/ControlWindow.o: src/app/ControlWindow.cpp.o
 .PHONY : src/app/ControlWindow.o
 
@@ -465,6 +473,7 @@ help:
 	@echo "... src/app/App.o"
 	@echo "... src/app/AudioAnalyzer.o"
 	@echo "... src/app/CapsLockDetector.o"
+	@echo "... src/app/CompositorFactory.o"
 	@echo "... src/app/ControlWindow.o"
 	@echo "... src/app/ControlWindow.i"
 	@echo "... src/app/ControlWindow.s"

@@ -7,6 +7,17 @@
 #include <chrono>
 
 namespace {
+LIFNetwork::Topology toLifTopology(ICompositor::LIFTopology topology) {
+    switch (topology) {
+        case ICompositor::LIFTopology::Ring:           return LIFNetwork::Topology::Ring;
+        case ICompositor::LIFTopology::FullyConnected: return LIFNetwork::Topology::FullyConnected;
+        case ICompositor::LIFTopology::Feedforward:    return LIFNetwork::Topology::Feedforward;
+        case ICompositor::LIFTopology::SparseRandom:   return LIFNetwork::Topology::SparseRandom;
+        case ICompositor::LIFTopology::SmallWorld:     return LIFNetwork::Topology::SmallWorld;
+        default:                                       return LIFNetwork::Topology::Ring;
+    }
+}
+
 LIFNetwork::Topology topologyFromParam(float value) {
     int bucket = std::clamp(static_cast<int>(value * 5.0f), 0, 4);
     switch (bucket) {
@@ -270,9 +281,9 @@ void MetalCompositor::setAudioGain(int fxSlot, float gain) {
         audioGain_[fxSlot] = gain;
 }
 
-void MetalCompositor::setLIFTopology(LIFNetwork::Topology topology) {
+void MetalCompositor::setLIFTopology(ICompositor::LIFTopology topology) {
     if (lifNetwork_)
-        lifNetwork_->setTopology(topology);
+    lifNetwork_->setTopology(toLifTopology(topology));
 }
 
 void MetalCompositor::setLIFNeuronCount(int neuronCount) {
@@ -280,7 +291,7 @@ void MetalCompositor::setLIFNeuronCount(int neuronCount) {
         lifNetwork_->setNeuronCount(neuronCount);
 }
 
-void MetalCompositor::setLIFDrivers(const std::vector<LIFDriver>& drivers) {
+void MetalCompositor::setLIFDrivers(const std::vector<ICompositor::LIFDriver>& drivers) {
     lifDriverCount_ = std::min(static_cast<int>(drivers.size()), NUM_FX_LAYERS);
     for (int i = 0; i < lifDriverCount_; ++i) {
         lifDrivers_[i].srcSlot = std::clamp(drivers[i].srcSlot, 0, NUM_SRC_LAYERS - 1);
@@ -289,7 +300,7 @@ void MetalCompositor::setLIFDrivers(const std::vector<LIFDriver>& drivers) {
     }
 }
 
-std::array<float, LIFNetwork::NUM_TONE_BINS> MetalCompositor::sampleLIFColumn(float phase01) const {
+std::array<float, ICompositor::NUM_LIF_TONE_BINS> MetalCompositor::sampleLIFColumn(float phase01) const {
     if (!lifNetwork_)
         return {};
     return lifNetwork_->sampleColumn(phase01);

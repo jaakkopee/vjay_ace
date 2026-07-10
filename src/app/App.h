@@ -1,8 +1,8 @@
 #pragma once
 #include "Constants.h"
+#include "ICompositor.h"
 #include "LayerManager.h"
 #include "MidiRouter.h"
-#include "MetalCompositor.h"
 #include "ControlWindow.h"
 #include "PressureControlWindow.h"
 #include "PerformanceWindow.h"
@@ -140,7 +140,7 @@ private:
     // Subsystems
     LayerManager      layers_;
     MidiRouter        midi_;
-    MetalCompositor   compositor_;
+    std::unique_ptr<ICompositor> compositor_;
     AudioAnalyzer     audio_;
     LIFToneSynth      lifToneSynth_;
     ControlWindow     controlWin_;
